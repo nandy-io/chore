@@ -1,0 +1,71 @@
+apiVersion: klot.io/v1
+kind: App
+metadata:
+  name: chore.nandy.io
+  description: Chore - Nandy I/O
+spec:
+  source:
+    site: github.com
+    repo: nandy-io/chore
+  manifests:
+  - path: kubernetes/namespace.yaml
+  - path: kubernetes/subscriptions.yaml
+  - site: github.com
+    repo: nandy-io/speech-daemon
+    path: kubernetes/daemon.yaml
+  - site: github.com
+    repo: nandy-io/speech-api
+    path: kubernetes/account.yaml
+  - site: github.com
+    repo: nandy-io/speech-api
+    path: kubernetes/daemon.yaml
+  - site: github.com
+    repo: nandy-io/speech-gui
+    path: kubernetes/daemon.yaml
+  labels:
+  - name: speakers
+    description: Which nodes have speakers and you want to speak
+    value: enabled
+    master: false
+  subscribe:
+  - name: redis
+    source:
+      site: github.com
+      repo: klot-io/redis
+    project:
+      publication: db
+      name: subscriptions
+      namespace: chore-nandy-io
+  - name: mysql
+    source:
+      site: github.com
+      repo: klot-io/mysql
+    project:
+      publication: db
+      name: subscriptions
+      namespace: chore-nandy-io
+  - name: speech
+    source:
+      site: github.com
+      repo: nandy-io/speech
+    project:
+      publication: api
+      name: subscriptions
+      namespace: chore-nandy-io
+  publish:
+  - name: gui
+    service:
+      name: www
+      namespace: chore-nandy-io
+      port: http
+    version: "0.1"
+    protocol: http
+  - name: api
+    service:
+      name: api
+      namespace: chore-nandy-io
+      port: http
+    version: "0.1"
+    protocol: http
+  url: 
+    publication: gui
