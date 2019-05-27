@@ -9,7 +9,6 @@ spec:
     repo: nandy-io/chore
   manifests:
   - path: kubernetes/namespace.yaml
-  - path: kubernetes/subscriptions.yaml
   - site: github.com
     repo: nandy-io/speech-daemon
     path: kubernetes/daemon.yaml
@@ -27,45 +26,13 @@ spec:
     description: Which nodes have speakers and you want to speak
     value: enabled
     master: false
-  subscribe:
-  - name: redis
-    source:
-      site: github.com
-      repo: klot-io/redis
-    project:
-      publication: db
-      name: subscriptions
-      namespace: chore-nandy-io
-  - name: mysql
-    source:
-      site: github.com
-      repo: klot-io/mysql
-    project:
-      publication: db
-      name: subscriptions
-      namespace: chore-nandy-io
-  - name: speech
-    source:
-      site: github.com
-      repo: nandy-io/speech
-    project:
-      publication: api
-      name: subscriptions
-      namespace: chore-nandy-io
-  publish:
-  - name: gui
-    service:
-      name: www
-      namespace: chore-nandy-io
-      port: http
-    version: "0.1"
-    protocol: http
-  - name: api
-    service:
-      name: api
-      namespace: chore-nandy-io
-      port: http
-    version: "0.1"
-    protocol: http
+  requires:
+  - site: github.com
+    repo: klot-io/redis
+  - site: github.com
+    repo: klot-io/mysql
+  - site: github.com
+    repo: nandy-io/speech
   url: 
-    publication: gui
+    protocol: http
+    host: www.chore-nandy-io
