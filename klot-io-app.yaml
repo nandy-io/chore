@@ -18,10 +18,10 @@ spec:
     path: kubernetes/account.yaml
   - site: github.com
     repo: nandy-io/speech-api
-    path: kubernetes/daemon.yaml
+    path: kubernetes/api.yaml
   - site: github.com
     repo: nandy-io/speech-gui
-    path: kubernetes/daemon.yaml
+    path: kubernetes/gui.yaml
   labels:
   - name: speakers
     description: Which nodes have speakers and you want to speak
