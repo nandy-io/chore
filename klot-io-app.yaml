@@ -14,9 +14,6 @@ spec:
     path: kubernetes/daemon.yaml
   - site: github.com
     repo: nandy-io/speech-api
-    path: kubernetes/account.yaml
-  - site: github.com
-    repo: nandy-io/speech-api
     path: kubernetes/api.yaml
   - site: github.com
     repo: nandy-io/speech-gui
