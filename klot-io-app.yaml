@@ -14,6 +14,9 @@ spec:
     path: kubernetes/daemon.yaml
   - site: github.com
     repo: nandy-io/chore-api
+    path: kubernetes/mysql.yaml
+  - site: github.com
+    repo: nandy-io/chore-api
     path: kubernetes/api.yaml
   - site: github.com
     repo: nandy-io/chore-gui
