@@ -10,19 +10,14 @@ spec:
   manifests:
   - path: kubernetes/namespace.yaml
   - site: github.com
-    repo: nandy-io/speech-daemon
+    repo: nandy-io/chore-daemon
     path: kubernetes/daemon.yaml
   - site: github.com
-    repo: nandy-io/speech-api
+    repo: nandy-io/chore-api
     path: kubernetes/api.yaml
   - site: github.com
-    repo: nandy-io/speech-gui
+    repo: nandy-io/chore-gui
     path: kubernetes/gui.yaml
-  labels:
-  - name: speakers
-    description: Which nodes have speakers and you want to speak
-    value: enabled
-    master: false
   requires:
   - site: github.com
     repo: klot-io/redis
