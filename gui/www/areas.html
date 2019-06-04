@@ -1,0 +1,47 @@
+{{#def.Header}}
+<div class="uk-overflow-container">
+    <button type="button" OnClick="DRApp.go('area_create')" class="uk-button uk-button-primary">
+        Create
+    </button>
+    <table class="uk-table">
+        <thead>
+            <tr>
+                <th>name</th>
+                <th>status</th>
+                <th>person</th>
+                <th>updated</th>
+            </tr>
+        </thead>
+        <tbody>
+            {{~it.areas :area}}
+            <tr 
+                OnClick="DRApp.go('area_retrieve','{{=area.id}}')"
+                class="uk-text-{{= area.status == 'positive' ? 'success' : 'danger'}}"
+            >
+                <td>{{=area.name}}</td>
+                <td>
+                    {{=area.status}}
+                    {{?area.status == "negative"}}
+                        <button 
+                            type="button" class="uk-button uk-button-primary"
+                            OnClick="DRApp.current.controller.action({{!area.id}}, 'right'); event.stopPropagation();"
+                        >
+                            <i class="uk-icon-thumbs-up"></i>
+                        </button>
+                    {{??}}
+                        <button 
+                            type="button" class="uk-button uk-button-primary"
+                            OnClick="DRApp.current.controller.action({{!area.id}}, 'wrong'); event.stopPropagation();"
+                        >
+                            <i class="uk-icon-thumbs-down"></i>
+                        </button>
+                    {{?}}
+                </td>
+                <td>{{=it.persons[area.person_id]}}</td>
+                <td>{{=(new Date(area.updated*1000)).toLocaleString()}}</td>
+            </tr>
+            {{~}}
+        </tbody>
+    </table>
+</div>
+{{#def.Footer}}

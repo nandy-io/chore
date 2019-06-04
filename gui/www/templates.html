@@ -1,0 +1,23 @@
+{{#def.Header}}
+<div class="uk-overflow-container">
+    <button type="button" OnClick="DRApp.go('template_create')" class="uk-button uk-button-primary">
+        Create
+    </button>
+    <table class="uk-table">
+        <thead>
+            <tr>
+                <th>name</th>
+                <th>kind</th>
+            </tr>
+        </thead>
+        <tbody>
+            {{~it.templates :template}}
+            <tr OnClick="DRApp.go('template_retrieve','{{=template.id}}')">
+                <td>{{=template.name}}</td>
+                <td>{{=template.kind}}</td>
+            </tr>
+            {{~}}
+        </tbody>
+    </table>
+</div>
+{{#def.Footer}}

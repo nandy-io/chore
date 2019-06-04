@@ -1,0 +1,49 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gui
+  namespace: chore-nandy-io
+  labels:
+    app: gui
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: gui
+  template:
+    metadata:
+      labels:
+        app: gui
+    spec:
+      containers:
+      - name: gui
+        image: docker.io/nandyio/chore-gui:0.1
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 80
+        readinessProbe:
+          initialDelaySeconds: 5
+          httpGet:
+            path: /api/health
+            port: 80
+        livenessProbe:
+          initialDelaySeconds: 2
+          periodSeconds: 5
+          httpGet:
+            path: /api/health
+            port: 80
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: www
+  namespace: chore-nandy-io
+spec:
+  selector:
+    app: gui
+  type: LoadBalancer
+  ports:
+  - name: http
+    protocol: TCP
+    port: 80
+    targetPort: 80

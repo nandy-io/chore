@@ -1,0 +1,26 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: daemon
+  namespace: chore-nandy-io
+  labels:
+    app: daemon
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: daemon
+  template:
+    metadata:
+      labels:
+        app: daemon
+    spec:
+      containers:
+      - name: daemon
+        image: docker.io/nandyio/chore-daemon:0.1
+        imagePullPolicy: Always
+        env:
+        - name: CHORE_API
+          value: http://api.chore-nandy-io
+        - name: SLEEP
+          value: "5"

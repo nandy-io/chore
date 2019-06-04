@@ -7,20 +7,12 @@ spec:
   source:
     site: github.com
     repo: nandy-io/chore
+  namespace: chore-nandy-io
   manifests:
-  - path: kubernetes/namespace.yaml
-  - site: github.com
-    repo: nandy-io/chore-api
-    path: kubernetes/mysql.yaml
-  - site: github.com
-    repo: nandy-io/chore-api
-    path: kubernetes/api.yaml
-  - site: github.com
-    repo: nandy-io/chore-daemon
-    path: kubernetes/daemon.yaml
-  - site: github.com
-    repo: nandy-io/chore-gui
-    path: kubernetes/gui.yaml
+  - path: api/kubernetes/mysql.yaml
+  - path: api/kubernetes/api.yaml
+  - path: daemon/kubernetes/daemon.yaml
+  - path: gui/kubernetes/gui.yaml
   requires:
   - site: github.com
     repo: klot-io/redis

@@ -1,0 +1,2 @@
+requests==2.22
+coverage==4.5.1

@@ -1,0 +1,20 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: mysql
+  namespace: chore-nandy-io
+spec:
+  backoffLimit: 12
+  template:
+    spec:
+      containers:
+      - name: mysql
+        image: docker.io/nandyio/chore-api:0.1
+        imagePullPolicy: Always
+        command: ["/opt/nandy-io/bin/db.py"]
+        env:
+        - name: MYSQL_HOST
+          value: db.mysql-klot-io
+        - name: MYSQL_PORT
+          value: "3306"
+      restartPolicy: Never

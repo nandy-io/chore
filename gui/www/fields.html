@@ -1,0 +1,70 @@
+{{?it.message}}
+<div class="uk-alert uk-alert-success">
+    {{=it.message}}
+</div>
+{{?}}
+{{?it.errors && it.errors.length}}
+<div class="uk-alert uk-alert-danger">
+    {{~it.errors :error}}
+        {{=error}}<br/>
+    {{~}}
+</div>
+{{?}}
+<form class="uk-form uk-form-horizontal">
+    {{~it.fields :field}}
+        {{var value = field.value || field.default || ''; }}
+        {{var readonly = field.readonly || it.readonly; }}
+        <div class="uk-form-row">
+            <label class="uk-form-label" for="{{=field.name}}">{{=field.label || field.name}}</label>
+            {{?readonly && field.style == "datetime"}}
+                {{=(new Date(value*1000)).toLocaleString()}}
+            {{??readonly && field.options && field.labels}}
+                {{=field.labels[field.value]}}
+            {{??readonly && field.name == "yaml"}}
+                <pre>{{=value}}</pre>
+            {{??readonly}}
+                {{=value}}
+            {{??field.style == "textarea"}}
+                <textarea 
+                    rows='7' cols='42'
+                    id="{{!field.name}}" 
+                    placeholder="{{!field.label || field.name}}" 
+                    {{?field.trigger}}OnInput="DRApp.current.controller.create_change();"{{?}} 
+                >{{=value}}</textarea>
+            {{??field.options && field.style == "select"}}
+                <select id="{{!field.name}}" {{?field.trigger}}OnChange="DRApp.current.controller.create_change();"{{?}}>
+                    {{~field.options :option}}
+                        <option value='{{!option}}' {{?value == option}}selected{{?}}>
+                            {{= field.labels ? field.labels[option] : option}}
+                        </option>
+                    {{~}}
+                </select>
+            {{??field.options}}
+                {{~field.options :option}}
+                    <input 
+                        type="radio" name="{{!field.name}}" value="{{!option}}"
+                        {{?value == option}}checked{{?}}
+                        {{?field.trigger}}OnClick="DRApp.current.controller.create_change();"{{?}} 
+                    /> 
+                    {{= field.labels ? field.labels[option] : option}}
+                {{~}}
+            {{??}}
+                <input 
+                    id="{{!field.name}}" 
+                    placeholder="{{!field.label || field.name}}" 
+                    value="{{!value}}"
+                    {{?field.trigger}}OnInput="DRApp.current.controller.create_change();"{{?}} 
+                    type="text"
+                />
+            {{?}}
+            {{?field.errors}}
+            <span class='uk-form uk-text-danger'>
+            {{~field.errors :error}}
+                {{=error}}
+            {{~}}
+            </span>
+            {{?}}
+        </div>
+    {{~}}
+    <br/>
+</form>

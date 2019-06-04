@@ -1,0 +1,21 @@
+{{#def.Header}}
+<div class="uk-overflow-container">
+    <button type="button" OnClick="DRApp.go('person_create')" class="uk-button uk-button-primary">
+        Create
+    </button>
+    <table class="uk-table">
+        <thead>
+            <tr>
+                <th>name</th>
+            </tr>
+        </thead>
+        <tbody>
+            {{~it.persons :person}}
+            <tr OnClick="DRApp.go('person_retrieve','{{=person.id}}')">
+                <td>{{=person.name}}</td>
+            </tr>
+            {{~}}
+        </tbody>
+    </table>
+</div>
+{{#def.Footer}}

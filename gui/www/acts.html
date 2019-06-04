@@ -1,0 +1,30 @@
+{{#def.Header}}
+<div class="uk-overflow-container">
+    <button type="button" OnClick="DRApp.go('act_create')" class="uk-button uk-button-primary">
+        Create
+    </button>
+    <table class="uk-table">
+        <thead>
+            <tr>
+                <th>person</th>
+                <th>name</th>
+                <th>status</th>
+                <th>updated</th>
+            </tr>
+        </thead>
+        <tbody>
+            {{~it.acts :act}}
+            <tr 
+                OnClick="DRApp.go('act_retrieve','{{=act.id}}')"
+                class="uk-text-{{= act.status == 'positive' ? 'success' : 'danger'}}"
+            >
+                <td>{{=it.persons[act.person_id]}}</td>
+                <td>{{=act.name}}</td>
+                <td>{{=act.status}}</td>
+                <td>{{=(new Date(act.updated*1000)).toLocaleString()}}</td>
+            </tr>
+            {{~}}
+        </tbody>
+    </table>
+</div>
+{{#def.Footer}}

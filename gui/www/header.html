@@ -1,0 +1,27 @@
+<div class="uk-container uk-container-center uk-margin-top uk-margin-large-bottom">
+    <h3 class="uk-text-center">Nandy I/O - Chore</h3>
+    <nav class="uk-navbar uk-margin-bottom">
+        <ul class="uk-navbar-nav">
+            <li {{? DRApp.current.paths[0] == '' }}class="uk-active"{{?}}>
+                <a href="{{=DRApp.link('home')}}">Home</a>
+            </li>
+            <li {{? DRApp.current.paths[0] == 'routine' }}class="uk-active"{{?}}>
+                <a href="{{=DRApp.link('routine_list')}}">Routines</a>
+            </li>
+            <li {{? DRApp.current.paths[0] == 'todo' }}class="uk-active"{{?}}>
+                <a href="{{=DRApp.link('todo_list')}}">ToDos</a>
+            </li>
+            <li {{? DRApp.current.paths[0] == 'act' }}class="uk-active"{{?}}>
+                <a href="{{=DRApp.link('act_list')}}">Acts</a>
+            </li>
+            <li {{? DRApp.current.paths[0] == 'area' }}class="uk-active"{{?}}>
+                <a href="{{=DRApp.link('area_list')}}">Areas</a>
+            </li>
+            <li {{? DRApp.current.paths[0] == 'template' }}class="uk-active"{{?}}>
+                <a href="{{=DRApp.link('template_list')}}">Templates</a>
+            </li>
+            <li {{? DRApp.current.paths[0] == 'person' }}class="uk-active"{{?}}>
+                <a href="{{=DRApp.link('person_list')}}">Persons</a>
+            </li>
+        </ul>
+    </nav>
