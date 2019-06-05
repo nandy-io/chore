@@ -668,7 +668,16 @@ class Act(Value):
         cls.notify("create", model)
 
         if model.status == "negative" and "todo" in model.data:
-            ToDo.create(person_id=model.person.id, template=model.data["todo"])
+
+            if isinstance(model.data["todo"], dict):
+                template = model.data["todo"]
+            else:
+                template = copy.deepcopy(model.data)
+                del template["todo"]
+                template["name"] = model.name
+                template["act"] = True
+
+            ToDo.create(person_id=model.person.id, status="opened", template=template)
 
         return model
 
@@ -899,7 +908,15 @@ class ToDo(State):
                 Area.right(flask.request.session.query(mysql.Area).get(model.data["area"]))
 
             if "act" in model.data:
-                Act.create(person_id=model.person.id, status="positive", template=model.data["act"])
+
+                if isinstance(model.data["act"], dict):
+                    template = model.data["act"]
+                else:
+                    template = copy.deepcopy(model.data)
+                    del template["act"]
+                    template["name"] = model.name
+
+                Act.create(person_id=model.person.id, status="positive", template=template)
 
             return True
 

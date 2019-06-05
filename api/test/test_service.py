@@ -2177,6 +2177,27 @@ class TestAct(TestRest):
             })
         ])
 
+        model = service.Act.create(**{
+            "person_id": person.id,
+            "name": "test",
+            "status": "negative",
+            "created": 6,
+            "data": {
+                "text": "hey",
+                "todo": True
+            }
+        })
+
+        todo = self.session.query(mysql.ToDo).filter_by(name="test").all()[0]
+        flask.request.session.commit()
+        self.assertEqual(todo.data, {
+            "name": "test",
+            "text": "hey",
+            "act": True,
+            "notified": 7
+        })
+
+
     @unittest.mock.patch("service.time.time", unittest.mock.MagicMock(return_value=7))
     @unittest.mock.patch("service.Status.notify")
     def test_wrong(self, mock_notify):
@@ -3141,6 +3162,21 @@ class TestToDo(TestRest):
 
         self.assertFalse(service.ToDo.complete(todo))
         mock_notify.assert_called_once()
+
+        todo = self.sample.todo("unit", "hey", data={
+            "text": "you",
+            "area": area.id,
+            "act": True
+        })
+
+        service.ToDo.complete(todo)
+        self.assertEqual(todo.status, "closed")
+        self.assertTrue(todo.data["end"], 7)
+
+        act = self.session.query(mysql.Act).filter_by(name="hey").all()[0]
+        self.assertEqual(act.person.id, todo.person.id)
+        self.assertEqual(act.status, "positive")
+        self.assertEqual(act.data["text"], "you")
 
     @unittest.mock.patch("service.time.time", unittest.mock.MagicMock(return_value=7))
     @unittest.mock.patch("service.ToDo.notify")
