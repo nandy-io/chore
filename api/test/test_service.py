@@ -3166,7 +3166,8 @@ class TestToDo(TestRest):
         todo = self.sample.todo("unit", "hey", data={
             "text": "you",
             "area": area.id,
-            "act": True
+            "act": True,
+            "notified": 7
         })
 
         service.ToDo.complete(todo)

@@ -668,12 +668,12 @@ class Act(Value):
         cls.notify("create", model)
 
         if model.status == "negative" and "todo" in model.data:
-
             if isinstance(model.data["todo"], dict):
                 template = model.data["todo"]
             else:
                 template = copy.deepcopy(model.data)
                 del template["todo"]
+                del template["notified"]
                 template["name"] = model.name
                 template["act"] = True
 
@@ -914,6 +914,7 @@ class ToDo(State):
                 else:
                     template = copy.deepcopy(model.data)
                     del template["act"]
+                    del template["notified"]
                     template["name"] = model.name
 
                 Act.create(person_id=model.person.id, status="positive", template=template)
