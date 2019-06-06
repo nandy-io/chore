@@ -1257,7 +1257,7 @@ class TestArea(TestRest):
 
         # template by id, person by name in template
 
-        template = self.sample.template("unit", "routine", data={
+        template = self.sample.template("unit", "area", data={
             "by": "template_id",
             "status": "negative",
             "person": "unit"
@@ -2095,7 +2095,7 @@ class TestAct(TestRest):
 
         # template by id, person by name in template
 
-        template = self.sample.template("unit", "routine", data={
+        template = self.sample.template("unit", "act", data={
             "by": "template_id",
             "status": "negative",
             "person": "unit"
@@ -4011,13 +4011,108 @@ class TestRoutine(TestRest):
 
         person = self.sample.person("unit")
 
+        # basic 
+
+        self.assertEqual(service.Routine.build(**{
+            "template_id": 0,
+            "data": {
+                "by": "data",
+                "person_id": person.id,
+                "name": "hey",
+                "status": "opened",
+                "created": 1,
+                "updated": 2
+            }
+        }), {
+            "person_id": person.id,
+            "name": "hey",
+            "status": "opened",
+            "created": 1,
+            "updated": 2,
+            "data": {
+                "by": "data",
+                "person_id": person.id,
+                "name": "hey",
+                "status": "opened",
+                "created": 1,
+                "updated": 2
+            }
+        })
+
+        # template by data, person by name
+
+        self.assertEqual(service.Routine.build(**{
+            "template": {
+                "by": "template",
+                "name": "hey",
+                "person": "nope"
+            },
+            "person": "unit"
+        }), {
+            "name": "hey",
+            "person_id": person.id,
+            "data": {
+                "by": "template",
+                "name": "hey",
+                "person": "nope"
+            }
+        })
+
+        # template by id, person by name in template
+
+        template = self.sample.template("unit", "routine", data={
+            "by": "template_id",
+            "status": "closed",
+            "person": "unit"
+        })
+
+        self.assertEqual(service.Routine.build(**{
+            "name": "hey",
+            "template_id": template.id
+        }), {
+            "name": "hey",
+            "person_id": person.id,
+            "status": "closed",
+            "data": {
+                "name": "unit",
+                "person": "unit",
+                "by": "template_id",
+                "status": "closed"
+            }
+        })
+
+        # template by name
+
+        self.assertEqual(service.Routine.build(**{
+            "name": "hey",
+            "template": "unit"
+        }), {
+            "name": "hey",
+            "person_id": person.id,
+            "status": "closed",
+            "data": {
+                "name": "unit",
+                "person": "unit",
+                "by": "template_id",
+                "status": "closed"
+            }
+        })
+
+    @unittest.mock.patch("flask.request")
+    @unittest.mock.patch("service.time.time", unittest.mock.MagicMock(return_value=7))
+    def test_tasks(self, mock_request):
+
+        mock_request.session = self.session
+
+        person = self.sample.person("unit")
+
         todo = self.sample.todo("unit")
         self.sample.todo("unit", status="closed")
         self.sample.todo("test")
 
         # explicit 
 
-        self.assertEqual(service.Routine.build(**{
+        self.assertEqual(service.Routine.tasks(service.Routine.build(**{
             "template_id": 0,
             "data": {
                 "by": "data",
@@ -4029,7 +4124,7 @@ class TestRoutine(TestRest):
                 "todos": True,
                 "tasks": [{}]
             }
-        }), {
+        })), {
             "person_id": person.id,
             "name": "hey",
             "status": "opened",

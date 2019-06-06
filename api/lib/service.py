@@ -366,8 +366,8 @@ class TemplateRUD(Template, RestRUD):
 
 class Status(Model):
 
-    @staticmethod
-    def build(**kwargs):
+    @classmethod
+    def build(cls, **kwargs):
         """
         Builds complete fields from a raw fields, template, template id, etc.
         """
@@ -397,6 +397,7 @@ class Status(Model):
                 template = flask.request.session.query(
                     mysql.Template
                 ).filter_by(
+                    kind=cls.SINGULAR,
                     name=kwargs["template"]
                 )[0]
 
@@ -966,12 +967,10 @@ class Routine(State):
     ACTIONS = State.ACTIONS + ["next"]
 
     @staticmethod
-    def build(**kwargs):
+    def tasks(fields):
         """
         Builds a routine from a raw fields, template, template id, etc.
         """
-
-        fields = State.build(**kwargs)
 
         if fields["data"].get("todos"):
 
@@ -1035,7 +1034,7 @@ class Routine(State):
     @classmethod
     def create(cls, **kwargs):
 
-        model = cls.MODEL(**cls.build(**kwargs))
+        model = cls.MODEL(**cls.tasks(cls.build(**kwargs)))
         flask.request.session.add(model)
         flask.request.session.commit()
 
