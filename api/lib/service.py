@@ -378,17 +378,32 @@ class Status(Model):
 
         data = {}
 
-        if "template" in kwargs:
+        if "template" in kwargs and isinstance(kwargs["template"], dict):
+
             data = kwargs["template"]
-        elif "template_id" in kwargs and kwargs["template_id"]:
-            template = flask.request.session.query(
-                mysql.Template
-            ).get(
-                kwargs["template_id"]
-            )
-            data = template.data
-            if "name" not in data:
-                data["name"] = template.name
+            
+        else:
+
+            template = None
+
+            if "template_id" in kwargs and kwargs["template_id"]:
+                template = flask.request.session.query(
+                    mysql.Template
+                ).get(
+                    kwargs["template_id"]
+                )
+
+            elif "template" in kwargs:
+                template = flask.request.session.query(
+                    mysql.Template
+                ).filter_by(
+                    name=kwargs["template"]
+                )[0]
+
+            if template:
+                data = template.data
+                if "name" not in data:
+                    data["name"] = template.name
 
         if data:
             fields["data"].update(copy.deepcopy(data))

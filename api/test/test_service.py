@@ -1278,6 +1278,23 @@ class TestArea(TestRest):
             }
         })
 
+        # template by name
+
+        self.assertEqual(service.Area.build(**{
+            "name": "hey",
+            "template": "unit"
+        }), {
+            "name": "hey",
+            "person_id": person.id,
+            "status": "negative",
+            "data": {
+                "name": "unit",
+                "person": "unit",
+                "by": "template_id",
+                "status": "negative"
+            }
+        })
+
     @unittest.mock.patch("service.time.time", unittest.mock.MagicMock(return_value=7))
     @unittest.mock.patch("service.notify")
     def test_notify(self, mock_notify):
@@ -2087,6 +2104,23 @@ class TestAct(TestRest):
         self.assertEqual(service.Act.build(**{
             "name": "hey",
             "template_id": template.id
+        }), {
+            "name": "hey",
+            "person_id": person.id,
+            "status": "negative",
+            "data": {
+                "name": "unit",
+                "person": "unit",
+                "by": "template_id",
+                "status": "negative"
+            }
+        })
+
+        # template by name
+
+        self.assertEqual(service.Act.build(**{
+            "name": "hey",
+            "template": "unit"
         }), {
             "name": "hey",
             "person_id": person.id,
@@ -2933,6 +2967,23 @@ class TestToDo(TestRest):
         self.assertEqual(service.ToDo.build(**{
             "name": "hey",
             "template_id": template.id
+        }), {
+            "name": "hey",
+            "person_id": person.id,
+            "status": "closed",
+            "data": {
+                "name": "unit",
+                "person": "unit",
+                "by": "template_id",
+                "status": "closed"
+            }
+        })
+
+        # template by name
+
+        self.assertEqual(service.ToDo.build(**{
+            "name": "hey",
+            "template": "unit"
         }), {
             "name": "hey",
             "person_id": person.id,
@@ -4036,6 +4087,23 @@ class TestRoutine(TestRest):
         self.assertEqual(service.Routine.build(**{
             "name": "hey",
             "template_id": template.id
+        }), {
+            "name": "hey",
+            "person_id": person.id,
+            "status": "closed",
+            "data": {
+                "name": "unit",
+                "person": "unit",
+                "by": "template_id",
+                "status": "closed"
+            }
+        })
+
+        # template by name
+
+        self.assertEqual(service.Routine.build(**{
+            "name": "hey",
+            "template": "unit"
         }), {
             "name": "hey",
             "person_id": person.id,
