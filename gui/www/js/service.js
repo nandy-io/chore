@@ -224,7 +224,7 @@ DRApp.template("ToDos",DRApp.load("todos"),null,DRApp.partials);
 DRApp.route("todo_list","/todo","ToDos","ToDo","list");
 DRApp.route("todo_create","/todo/create","Create","ToDo","create");
 DRApp.route("todo_retrieve","/todo/{id:^\\d+$}","Retrieve","ToDo","retrieve");
-DRApp.route("todo_update","/todo/{id:^\\d+$}/update","Update","Act","update");
+DRApp.route("todo_update","/todo/{id:^\\d+$}/update","Update","ToDo","update");
 
 // Routines
 
@@ -248,4 +248,4 @@ DRApp.template("Routines",DRApp.load("routines"),null,DRApp.partials);
 DRApp.route("routine_list","/routine","Routines","Routine","list");
 DRApp.route("routine_create","/routine/create","Create","Routine","create");
 DRApp.route("routine_retrieve","/routine/{id:^\\d+$}","Retrieve","Routine","retrieve");
-DRApp.route("routine_update","/routine/{id:^\\d+$}/update","Update","Act","update");
+DRApp.route("routine_update","/routine/{id:^\\d+$}/update","Update","Routine","update");
