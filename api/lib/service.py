@@ -516,7 +516,7 @@ class StatusCL(RestCL):
     @require_session
     def get(self):
 
-        since = 7
+        since = None
         filter_by = {}
 
         for name, value in flask.request.args.to_dict().items():
@@ -529,11 +529,17 @@ class StatusCL(RestCL):
             self.MODEL
         ).filter_by(
             **filter_by
-        ).filter(
-            self.MODEL.updated>time.time()-since*60*60*24
-        ).order_by(
+        )
+        
+        if since is not None:
+            models = models.filter(
+                self.MODEL.updated>time.time()-since*60*60*24
+            )
+
+        models = models.order_by(
             *self.ORDER
         ).all()
+        
         flask.request.session.commit()
 
         return {self.PLURAL: models_out(models)}

@@ -3,45 +3,77 @@
     <button type="button" OnClick="DRApp.go('area_create')" class="uk-button uk-button-primary">
         Create
     </button>
-    <table class="uk-table">
-        <thead>
-            <tr>
-                <th>name</th>
-                <th>status</th>
-                <th>person</th>
-                <th>updated</th>
-            </tr>
-        </thead>
-        <tbody>
-            {{~it.areas :area}}
-            <tr 
-                OnClick="DRApp.go('area_retrieve','{{=area.id}}')"
-                class="uk-text-{{= area.status == 'positive' ? 'success' : 'danger'}} clickable"
-            >
-                <td>{{=area.name}}</td>
-                <td>
-                    {{=area.status}}
-                    {{?area.status == "negative"}}
-                        <button 
-                            type="button" class="uk-button uk-button-primary"
-                            OnClick="DRApp.current.controller.action({{!area.id}}, 'right'); event.stopPropagation();"
-                        >
-                            <i class="uk-icon-thumbs-up"></i>
-                        </button>
-                    {{??}}
-                        <button 
-                            type="button" class="uk-button uk-button-primary"
-                            OnClick="DRApp.current.controller.action({{!area.id}}, 'wrong'); event.stopPropagation();"
-                        >
-                            <i class="uk-icon-thumbs-down"></i>
-                        </button>
-                    {{?}}
-                </td>
-                <td>{{=it.persons[area.person_id]}}</td>
-                <td>{{=(new Date(area.updated*1000)).toLocaleString()}}</td>
-            </tr>
-            {{~}}
-        </tbody>
-    </table>
+    <form class="uk-form">
+        <table class="uk-table">
+            <thead>
+                <tr>
+                    <th>name</th>
+                    <th>
+                        status
+                        <select id="status" OnChange="DRApp.current.controller.list_change();">
+                            <option value='all'>All</option>
+                            {{~it.statuses :status}}
+                                <option value='{{!status}}' {{?it.status == status}}selected{{?}}>
+                                    {{=status}}
+                                </option>
+                            {{~}}
+                        </select>
+                    </th>
+                    <th>
+                        person
+                        <select id="person_id" OnChange="DRApp.current.controller.list_change();">
+                            <option value='all'>All</option>
+                            {{~it.persons :person}}
+                                <option value='{{!person.id}}' {{?it.person_id == person.id}}selected{{?}}>
+                                    {{=person.name}}
+                                </option>
+                            {{~}}
+                        </select>
+                    </th>
+                    <th>
+                        updated
+                        <select id="since" OnChange="DRApp.current.controller.list_change();">
+                            <option value='all'>All</option>
+                            {{~it.sinces :since}}
+                                <option value='{{!since}}' {{?it.since == since}}selected{{?}}>
+                                    since {{=since}} days
+                                </option>
+                            {{~}}
+                        </select>
+                    </th>
+                </tr>
+            </thead>
+            <tbody>
+                {{~it.areas :area}}
+                <tr 
+                    OnClick="DRApp.go('area_retrieve','{{=area.id}}')"
+                    class="uk-text-{{= area.status == 'positive' ? 'success' : 'danger'}} clickable"
+                >
+                    <td>{{=area.name}}</td>
+                    <td>
+                        {{=area.status}}
+                        {{?area.status == "negative"}}
+                            <button 
+                                type="button" class="uk-button uk-button-primary"
+                                OnClick="DRApp.current.controller.action({{!area.id}}, 'right'); event.stopPropagation();"
+                            >
+                                <i class="uk-icon-thumbs-up"></i>
+                            </button>
+                        {{??}}
+                            <button 
+                                type="button" class="uk-button uk-button-primary"
+                                OnClick="DRApp.current.controller.action({{!area.id}}, 'wrong'); event.stopPropagation();"
+                            >
+                                <i class="uk-icon-thumbs-down"></i>
+                            </button>
+                        {{?}}
+                    </td>
+                    <td>{{=it.persons_lookup[area.person_id]}}</td>
+                    <td>{{=(new Date(area.updated*1000)).toLocaleString()}}</td>
+                </tr>
+                {{~}}
+            </tbody>
+        </table>
+    </form>
 </div>
 {{#def.Footer}}
