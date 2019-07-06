@@ -8,7 +8,17 @@
             <thead>
                 <tr>
                     <th>name</th>
-                    <th>status</th>
+                    <th>
+                        status
+                        <select id="status" OnChange="DRApp.current.controller.list_change();">
+                            <option value='all'>All</option>
+                            {{~it.statuses :status}}
+                                <option value='{{!status}}' {{?it.status == status}}selected{{?}}>
+                                    {{=status}}
+                                </option>
+                            {{~}}
+                        </select>
+                    </th>
                     <th>
                         person
                         <select id="person_id" OnChange="DRApp.current.controller.list_change();">

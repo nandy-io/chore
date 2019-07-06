@@ -151,7 +151,7 @@ DRApp.controller("Person","Base",{
         this.application.refresh();
     },
     not_me: function() {
-        DRApp.me = null;
+        DRApp.me = '';
         $.cookie('chore-nandy-io-me', DRApp.me);
         this.application.refresh();
     }
@@ -192,16 +192,24 @@ DRApp.controller("Status","Base",{
             }
         }
     },
+    statuses_lookup: function() {
+        this.it.statuses = this.statuses;
+        this.it.status = this.application.current.query.status;
+        for (var status = 0; status < this.it.statuses.length; status++) {
+            if (!this.it.status && this.it.statuses[status] == this.status) {
+                this.it.status = this.it.statuses[status];
+            }
+        }
+    },
     list: function() {
         this.persons_lookup();
-        if (this.it.person_id && !this.application.current.query.person_id) {
-            this.application.current.query.person_id = this.it.person_id;
-            this.application.go(this.singular + '_list', this.application.current.query);
-            return;
-        }
+        this.statuses_lookup();
         var params = {};
-        if (this.it.person_id != 'all') {
+        if (this.it.person_id && this.it.person_id != 'all') {
             params.person_id = this.it.person_id;
+        }
+        if (this.it.status && this.it.status != 'all') {
+            params.status = this.it.status;
         }
         this.it[this.plural] = this.rest("GET",this.url(params))[this.plural];
         this.application.render(this.it);
@@ -209,6 +217,7 @@ DRApp.controller("Status","Base",{
     list_change: function() {
         var params = {};
         params.person_id = $("#person_id").val();
+        params.status = $("#status").val();
         this.application.go(this.singular + '_list', params);
     },
     action: function(id, action) {
@@ -217,9 +226,28 @@ DRApp.controller("Status","Base",{
     }
 });
 
+// Value
+
+DRApp.controller("Value","Status",{
+    statuses: [
+        "positive",
+        "negative"
+    ]
+});
+
+// Status
+
+DRApp.controller("State","Status",{
+    statuses: [
+        "opened",
+        "closed"
+    ],
+    status: "opened"
+});
+
 // Areas
 
-DRApp.controller("Area","Status",{
+DRApp.controller("Area","Value",{
     singular: "area",
     plural: "areas"
 });
@@ -233,7 +261,7 @@ DRApp.route("area_update","/area/{id:^\\d+$}/update","Update","Area","update");
 
 // Acts
 
-DRApp.controller("Act","Status",{
+DRApp.controller("Act","Value",{
     singular: "act",
     plural: "acts"
 });
@@ -247,7 +275,7 @@ DRApp.route("act_update","/act/{id:^\\d+$}/update","Update","Act","update");
 
 // ToDos
 
-DRApp.controller("ToDo","Status",{
+DRApp.controller("ToDo","State",{
     singular: "todo",
     plural: "todos"
 });
@@ -261,7 +289,7 @@ DRApp.route("todo_update","/todo/{id:^\\d+$}/update","Update","ToDo","update");
 
 // Routines
 
-DRApp.controller("Routine","Status",{
+DRApp.controller("Routine","State",{
     singular: "routine",
     plural: "routines",
     retrieve: function() {
