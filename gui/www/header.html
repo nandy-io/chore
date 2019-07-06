@@ -24,4 +24,11 @@
                 <a href="{{=DRApp.link('person_list')}}">Persons</a>
             </li>
         </ul>
+        {{?DRApp.me}}
+        <div class="uk-navbar-flip">
+            <ul class="uk-navbar-nav">
+                <li><a href="">{{=DRApp.me}}</a></li>
+            </ul>
+        </div>
+        {{?}}
     </nav>

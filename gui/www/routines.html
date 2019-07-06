@@ -3,177 +3,189 @@
     <button type="button" OnClick="DRApp.go('routine_create')" class="uk-button uk-button-primary">
         Create
     </button>
-    <table class="uk-table">
-        <thead>
-            <tr>
-                <th>person</th>
-                <th>name</th>
-                <th>status</th>
-                <th>updated</th>
-            </tr>
-        </thead>
-        <tbody>
-            {{~it.routines :routine}}
-                <tr 
-                    OnClick="DRApp.go('routine_retrieve','{{=routine.id}}')" class="clickable"
-                >
-                    <td>{{=it.persons[routine.person_id]}}</td>
-                    <td>{{=routine.name}}</td>
-                    <td>
-                        {{?routine.status == "closed"}}
-                            {{?routine.data.skipped}}
-                                skipped
-                                <button 
-                                    type="button" class="uk-button uk-button-primary"
-                                    OnClick="DRApp.current.controller.action({{!routine.id}}, 'unskip'); event.stopPropagation();"
-                                    title="unskip"
-                                >
-                                    <i class="uk-icon-fast-backward"></i>
-                                </button>
-                            {{??routine.data.expired}}
-                                expired
-                                <button 
-                                    type="button" class="uk-button uk-button-primary"
-                                    OnClick="DRApp.current.controller.action({{!routine.id}}, 'unexpire'); event.stopPropagation();"
-                                    title="unexpire"
-                                >
-                                    <i class="uk-icon-hourglass-start"></i>
-                                </button>
-                            {{??}}
-                                closed
-                                <button 
-                                    type="button" class="uk-button uk-button-primary"
-                                    OnClick="DRApp.current.controller.action({{!routine.id}}, 'uncomplete'); event.stopPropagation();"
-                                    title="uncomplete"
-                                >
-                                    <i class="uk-icon-times"></i>
-                                </button>
-                            {{?}}
-                        {{??}}
-                            {{?routine.data.paused}}
-                                paused
-                                <button 
-                                    type="button" class="uk-button uk-button-primary"
-                                    OnClick="DRApp.current.controller.action({{!routine.id}}, 'unpause'); event.stopPropagation();"
-                                    title="unpause"
-                                >
-                                    <i class="uk-icon-play"></i>
-                                </button>
-                            {{??}}
-                                opened
-                                {{?routine.data.tasks}}
-                                <button 
-                                    type="button" class="uk-button uk-button-primary"
-                                    OnClick="DRApp.current.controller.action({{!routine.id}}, 'next'); event.stopPropagation();"
-                                    title="next"
-                                >
-                                    <i class="uk-icon-forward"></i>
-                                </button>
-                                {{?}}
-                                <button 
-                                    type="button" class="uk-button uk-button-primary"
-                                    OnClick="DRApp.current.controller.action({{!routine.id}}, 'complete'); event.stopPropagation();"
-                                    title="complete"
-                                >
-                                    <i class="uk-icon-check"></i>
-                                </button>
-                                <button 
-                                    type="button" class="uk-button uk-button-primary"
-                                    OnClick="DRApp.current.controller.action({{!routine.id}}, 'pause'); event.stopPropagation();"
-                                    title="pause"
-                                >
-                                    <i class="uk-icon-pause"></i>
-                                </button>
-                                <button 
-                                    type="button" class="uk-button uk-button-primary"
-                                    OnClick="DRApp.current.controller.action({{!routine.id}}, 'skip'); event.stopPropagation();"
-                                    title="skip"
-                                >
-                                    <i class="uk-icon-fast-forward"></i>
-                                </button>
-                                <button 
-                                    type="button" class="uk-button uk-button-primary"
-                                    OnClick="DRApp.current.controller.action({{!routine.id}}, 'expire'); event.stopPropagation();"
-                                    title="expire"
-                                >
-                                    <i class="uk-icon-hourglass-end"></i>
-                                </button>
-                            {{?}}
-                        {{?}}
-                    </td>
-                    <td>{{=(new Date(routine.updated*1000)).toLocaleString()}}</td>
+    <form class="uk-form">
+        <table class="uk-table">
+            <thead>
+                <tr>
+                    <th>
+                        person
+                        <select id="person_id" OnChange="DRApp.current.controller.list_change();">
+                            <option value='all'>All</option>
+                            {{~it.persons :person}}
+                                <option value='{{!person.id}}' {{?it.person_id == person.id}}selected{{?}}>
+                                    {{=person.name}}
+                                </option>
+                            {{~}}
+                        </select>
+                    </th>
+                    <th>name</th>
+                    <th>status</th>
+                    <th>updated</th>
                 </tr>
-                {{?routine.data.tasks}}
-                    {{~routine.data.tasks :task:index}}
-                        {{ task.id = index; }}
-                        <tr 
-                            OnClick="DRApp.go('routine_retrieve','{{=routine.id}}')"
-                        >
-                            <td></td>
-                            <td>- {{=task.text}}</td>
-                            <td>
-                                {{?task.end}}
-                                    {{?task.skipped}}
-                                        skipped
-                                        <button 
-                                            type="button" class="uk-button uk-button-primary"
-                                            OnClick="DRApp.current.controller.task_action({{!routine.id}}, {{=task.id}}, 'unskip'); event.stopPropagation();"
-                                            title="unskip"
-                                        >
-                                            <i class="uk-icon-fast-backward"></i>
-                                        </button>
-                                    {{??}}
-                                        closed
-                                        <button 
-                                            type="button" class="uk-button uk-button-primary"
-                                            OnClick="DRApp.current.controller.task_action({{!routine.id}}, {{=task.id}}, 'uncomplete'); event.stopPropagation();"
-                                            title="uncomplete"
-                                        >
-                                            <i class="uk-icon-times"></i>
-                                        </button>
-                                    {{?}}
+            </thead>
+            <tbody>
+                {{~it.routines :routine}}
+                    <tr 
+                        OnClick="DRApp.go('routine_retrieve','{{=routine.id}}')" class="clickable"
+                    >
+                        <td>{{=it.persons_lookup[routine.person_id]}}</td>
+                        <td>{{=routine.name}}</td>
+                        <td>
+                            {{?routine.status == "closed"}}
+                                {{?routine.data.skipped}}
+                                    skipped
+                                    <button 
+                                        type="button" class="uk-button uk-button-primary"
+                                        OnClick="DRApp.current.controller.action({{!routine.id}}, 'unskip'); event.stopPropagation();"
+                                        title="unskip"
+                                    >
+                                        <i class="uk-icon-fast-backward"></i>
+                                    </button>
+                                {{??routine.data.expired}}
+                                    expired
+                                    <button 
+                                        type="button" class="uk-button uk-button-primary"
+                                        OnClick="DRApp.current.controller.action({{!routine.id}}, 'unexpire'); event.stopPropagation();"
+                                        title="unexpire"
+                                    >
+                                        <i class="uk-icon-hourglass-start"></i>
+                                    </button>
                                 {{??}}
-                                    {{?task.paused}}
-                                        paused
-                                        <button 
-                                            type="button" class="uk-button uk-button-primary"
-                                            OnClick="DRApp.current.controller.task_action({{!routine.id}}, {{=task.id}}, 'unpause'); event.stopPropagation();"
-                                            title="unpause"
-                                        >
-                                            <i class="uk-icon-play"></i>
-                                        </button>
-                                    {{??}}
-                                        opened
-                                        <button 
-                                            type="button" class="uk-button uk-button-primary"
-                                            OnClick="DRApp.current.controller.task_action({{!routine.id}}, {{=task.id}}, 'complete'); event.stopPropagation();"
-                                            title="complete"
-                                        >
-                                            <i class="uk-icon-check"></i>
-                                        </button>
-                                        <button 
-                                            type="button" class="uk-button uk-button-primary"
-                                            OnClick="DRApp.current.controller.task_action({{!routine.id}}, {{=task.id}}, 'pause'); event.stopPropagation();"
-                                            title="pause"
-                                        >
-                                            <i class="uk-icon-pause"></i>
-                                        </button>
-                                        <button 
-                                            type="button" class="uk-button uk-button-primary"
-                                            OnClick="DRApp.current.controller.task_action({{!routine.id}}, {{=task.id}}, 'skip'); event.stopPropagation();"
-                                            title="skip"
-                                        >
-                                            <i class="uk-icon-fast-forward"></i>
-                                        </button>
-                                    {{?}}
+                                    closed
+                                    <button 
+                                        type="button" class="uk-button uk-button-primary"
+                                        OnClick="DRApp.current.controller.action({{!routine.id}}, 'uncomplete'); event.stopPropagation();"
+                                        title="uncomplete"
+                                    >
+                                        <i class="uk-icon-times"></i>
+                                    </button>
                                 {{?}}
-                            </td>
-                            <td></td>
-                        </tr>
-                    {{~}}
-                {{?}}
-            {{~}}
-        </tbody>
-    </table>
+                            {{??}}
+                                {{?routine.data.paused}}
+                                    paused
+                                    <button 
+                                        type="button" class="uk-button uk-button-primary"
+                                        OnClick="DRApp.current.controller.action({{!routine.id}}, 'unpause'); event.stopPropagation();"
+                                        title="unpause"
+                                    >
+                                        <i class="uk-icon-play"></i>
+                                    </button>
+                                {{??}}
+                                    opened
+                                    {{?routine.data.tasks}}
+                                    <button 
+                                        type="button" class="uk-button uk-button-primary"
+                                        OnClick="DRApp.current.controller.action({{!routine.id}}, 'next'); event.stopPropagation();"
+                                        title="next"
+                                    >
+                                        <i class="uk-icon-forward"></i>
+                                    </button>
+                                    {{?}}
+                                    <button 
+                                        type="button" class="uk-button uk-button-primary"
+                                        OnClick="DRApp.current.controller.action({{!routine.id}}, 'complete'); event.stopPropagation();"
+                                        title="complete"
+                                    >
+                                        <i class="uk-icon-check"></i>
+                                    </button>
+                                    <button 
+                                        type="button" class="uk-button uk-button-primary"
+                                        OnClick="DRApp.current.controller.action({{!routine.id}}, 'pause'); event.stopPropagation();"
+                                        title="pause"
+                                    >
+                                        <i class="uk-icon-pause"></i>
+                                    </button>
+                                    <button 
+                                        type="button" class="uk-button uk-button-primary"
+                                        OnClick="DRApp.current.controller.action({{!routine.id}}, 'skip'); event.stopPropagation();"
+                                        title="skip"
+                                    >
+                                        <i class="uk-icon-fast-forward"></i>
+                                    </button>
+                                    <button 
+                                        type="button" class="uk-button uk-button-primary"
+                                        OnClick="DRApp.current.controller.action({{!routine.id}}, 'expire'); event.stopPropagation();"
+                                        title="expire"
+                                    >
+                                        <i class="uk-icon-hourglass-end"></i>
+                                    </button>
+                                {{?}}
+                            {{?}}
+                        </td>
+                        <td>{{=(new Date(routine.updated*1000)).toLocaleString()}}</td>
+                    </tr>
+                    {{?routine.data.tasks}}
+                        {{~routine.data.tasks :task:index}}
+                            {{ task.id = index; }}
+                            <tr 
+                                OnClick="DRApp.go('routine_retrieve','{{=routine.id}}')"
+                            >
+                                <td></td>
+                                <td>- {{=task.text}}</td>
+                                <td>
+                                    {{?task.end}}
+                                        {{?task.skipped}}
+                                            skipped
+                                            <button 
+                                                type="button" class="uk-button uk-button-primary"
+                                                OnClick="DRApp.current.controller.task_action({{!routine.id}}, {{=task.id}}, 'unskip'); event.stopPropagation();"
+                                                title="unskip"
+                                            >
+                                                <i class="uk-icon-fast-backward"></i>
+                                            </button>
+                                        {{??}}
+                                            closed
+                                            <button 
+                                                type="button" class="uk-button uk-button-primary"
+                                                OnClick="DRApp.current.controller.task_action({{!routine.id}}, {{=task.id}}, 'uncomplete'); event.stopPropagation();"
+                                                title="uncomplete"
+                                            >
+                                                <i class="uk-icon-times"></i>
+                                            </button>
+                                        {{?}}
+                                    {{??}}
+                                        {{?task.paused}}
+                                            paused
+                                            <button 
+                                                type="button" class="uk-button uk-button-primary"
+                                                OnClick="DRApp.current.controller.task_action({{!routine.id}}, {{=task.id}}, 'unpause'); event.stopPropagation();"
+                                                title="unpause"
+                                            >
+                                                <i class="uk-icon-play"></i>
+                                            </button>
+                                        {{??}}
+                                            opened
+                                            <button 
+                                                type="button" class="uk-button uk-button-primary"
+                                                OnClick="DRApp.current.controller.task_action({{!routine.id}}, {{=task.id}}, 'complete'); event.stopPropagation();"
+                                                title="complete"
+                                            >
+                                                <i class="uk-icon-check"></i>
+                                            </button>
+                                            <button 
+                                                type="button" class="uk-button uk-button-primary"
+                                                OnClick="DRApp.current.controller.task_action({{!routine.id}}, {{=task.id}}, 'pause'); event.stopPropagation();"
+                                                title="pause"
+                                            >
+                                                <i class="uk-icon-pause"></i>
+                                            </button>
+                                            <button 
+                                                type="button" class="uk-button uk-button-primary"
+                                                OnClick="DRApp.current.controller.task_action({{!routine.id}}, {{=task.id}}, 'skip'); event.stopPropagation();"
+                                                title="skip"
+                                            >
+                                                <i class="uk-icon-fast-forward"></i>
+                                            </button>
+                                        {{?}}
+                                    {{?}}
+                                </td>
+                                <td></td>
+                            </tr>
+                        {{~}}
+                    {{?}}
+                {{~}}
+            </tbody>
+        </table>
+    </form>
 </div>
 {{#def.Footer}}

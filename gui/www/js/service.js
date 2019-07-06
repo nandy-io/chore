@@ -8,6 +8,8 @@ $.ajaxPrefilter(function(options, originalOptions, jqXHR) {
 
 });
 
+DRApp.me = $.cookie('chore-nandy-io-me');
+
 DRApp.capitalize = function(value) {
   return value.charAt(0).toUpperCase() + value.slice(1);
 }
@@ -31,8 +33,12 @@ DRApp.controller("Base",null,{
     home: function() {
         this.application.render(this.it);
     },
-    url: function() {
-        return "/api/" + this.singular;
+    url: function(params) {
+        if (params && Object.keys(params).length) {
+            return "/api/" + this.singular + "?" + $.param(params);
+        } else {
+            return "/api/" + this.singular;
+        }
     },
     id_url: function() {
         return this.url() + "/" + this.application.current.path.id;
@@ -138,7 +144,17 @@ DRApp.route("home","/","Home","Base","home");
 
 DRApp.controller("Person","Base",{
     singular: "person",
-    plural: "persons"
+    plural: "persons",
+    me: function(name) {
+        DRApp.me = name;
+        $.cookie('chore-nandy-io-me', DRApp.me);
+        this.application.refresh();
+    },
+    not_me: function() {
+        DRApp.me = null;
+        $.cookie('chore-nandy-io-me', DRApp.me);
+        this.application.refresh();
+    }
 });
 
 DRApp.template("Persons",DRApp.load("persons"),null,DRApp.partials);
@@ -166,17 +182,34 @@ DRApp.route("template_update","/template/{id:^\\d+$}/update","Update","Template"
 
 DRApp.controller("Status","Base",{
     persons_lookup: function() {
-        var lookup = {};
-        var persons = this.rest("GET","/api/person").persons;
-        for (var person = 0; person < persons.length; person++) {
-            lookup[persons[person]["id"]] = persons[person]["name"];
+        this.it.persons_lookup = {};
+        this.it.persons = this.rest("GET","/api/person").persons;
+        this.it.person_id = this.application.current.query.person_id;
+        for (var person = 0; person < this.it.persons.length; person++) {
+            this.it.persons_lookup[this.it.persons[person]["id"]] = this.it.persons[person]["name"];
+            if (!this.it.person_id && this.it.persons[person]["name"] == DRApp.me) {
+                this.it.person_id = this.it.persons[person]["id"];
+            }
         }
-        return lookup;
     },
     list: function() {
-        this.it = this.rest("GET",this.url());
-        this.it.persons = this.persons_lookup();
+        this.persons_lookup();
+        if (this.it.person_id && !this.application.current.query.person_id) {
+            this.application.current.query.person_id = this.it.person_id;
+            this.application.go(this.singular + '_list', this.application.current.query);
+            return;
+        }
+        var params = {};
+        if (this.it.person_id != 'all') {
+            params.person_id = this.it.person_id;
+        }
+        this.it[this.plural] = this.rest("GET",this.url(params))[this.plural];
         this.application.render(this.it);
+    },
+    list_change: function() {
+        var params = {};
+        params.person_id = $("#person_id").val();
+        this.application.go(this.singular + '_list', params);
     },
     action: function(id, action) {
         this.rest("PATCH",this.url() + "/" + id + "/" + action);
@@ -236,7 +269,6 @@ DRApp.controller("Routine","Status",{
         this.it.routine = this.rest("GET",this.id_url()).routine;
         this.application.render(this.it);
     },
-
     task_action: function(routine_id, task_id, action) {
         this.rest("PATCH",this.url() + "/" + routine_id + "/task/" + task_id + "/" + action);
         this.application.refresh();

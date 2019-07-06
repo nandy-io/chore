@@ -3,99 +3,111 @@
     <button type="button" OnClick="DRApp.go('todo_create')" class="uk-button uk-button-primary">
         Create
     </button>
-    <table class="uk-table">
-        <thead>
-            <tr>
-                <th>person</th>
-                <th>name</th>
-                <th>status</th>
-                <th>updated</th>
-            </tr>
-        </thead>
-        <tbody>
-            {{~it.todos :todo}}
-            <tr 
-                OnClick="DRApp.go('todo_retrieve','{{=todo.id}}')" class="clickable"
-            >
-                <td>{{=it.persons[todo.person_id]}}</td>
-                <td>{{=todo.name}}</td>
-                <td>
-                    {{?todo.status == "closed"}}
-                        {{?todo.data.skipped}}
-                            skipped
-                            <button 
-                                type="button" class="uk-button uk-button-primary"
-                                OnClick="DRApp.current.controller.action({{!todo.id}}, 'unskip'); event.stopPropagation();"
-                                title="unskip"
-                            >
-                                <i class="uk-icon-fast-backward"></i>
-                            </button>
-                        {{??todo.data.expired}}
-                            expired
-                            <button 
-                                type="button" class="uk-button uk-button-primary"
-                                OnClick="DRApp.current.controller.action({{!todo.id}}, 'unexpire'); event.stopPropagation();"
-                                title="unexpire"
-                            >
-                                <i class="uk-icon-hourglass-start"></i>
-                            </button>
+    <form class="uk-form">
+        <table class="uk-table">
+            <thead>
+                <tr>
+                    <th>
+                        person
+                        <select id="person_id" OnChange="DRApp.current.controller.list_change();">
+                            <option value='all'>All</option>
+                            {{~it.persons :person}}
+                                <option value='{{!person.id}}' {{?it.person_id == person.id}}selected{{?}}>
+                                    {{=person.name}}
+                                </option>
+                            {{~}}
+                        </select>
+                    </th>
+                    <th>name</th>
+                    <th>status</th>
+                    <th>updated</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{~it.todos :todo}}
+                <tr 
+                    OnClick="DRApp.go('todo_retrieve','{{=todo.id}}')" class="clickable"
+                >
+                    <td>{{=it.persons_lookup[todo.person_id]}}</td>
+                    <td>{{=todo.name}}</td>
+                    <td>
+                        {{?todo.status == "closed"}}
+                            {{?todo.data.skipped}}
+                                skipped
+                                <button 
+                                    type="button" class="uk-button uk-button-primary"
+                                    OnClick="DRApp.current.controller.action({{!todo.id}}, 'unskip'); event.stopPropagation();"
+                                    title="unskip"
+                                >
+                                    <i class="uk-icon-fast-backward"></i>
+                                </button>
+                            {{??todo.data.expired}}
+                                expired
+                                <button 
+                                    type="button" class="uk-button uk-button-primary"
+                                    OnClick="DRApp.current.controller.action({{!todo.id}}, 'unexpire'); event.stopPropagation();"
+                                    title="unexpire"
+                                >
+                                    <i class="uk-icon-hourglass-start"></i>
+                                </button>
+                            {{??}}
+                                closed
+                                <button 
+                                    type="button" class="uk-button uk-button-primary"
+                                    OnClick="DRApp.current.controller.action({{!todo.id}}, 'uncomplete'); event.stopPropagation();"
+                                    title="uncomplete"
+                                >
+                                    <i class="uk-icon-times"></i>
+                                </button>
+                            {{?}}
                         {{??}}
-                            closed
-                            <button 
-                                type="button" class="uk-button uk-button-primary"
-                                OnClick="DRApp.current.controller.action({{!todo.id}}, 'uncomplete'); event.stopPropagation();"
-                                title="uncomplete"
-                            >
-                                <i class="uk-icon-times"></i>
-                            </button>
+                            {{?todo.data.paused}}
+                                paused
+                                <button 
+                                    type="button" class="uk-button uk-button-primary"
+                                    OnClick="DRApp.current.controller.action({{!todo.id}}, 'unpause'); event.stopPropagation();"
+                                    title="unpause"
+                                >
+                                    <i class="uk-icon-play"></i>
+                                </button>
+                            {{??}}
+                                opened
+                                <button 
+                                    type="button" class="uk-button uk-button-primary"
+                                    OnClick="DRApp.current.controller.action({{!todo.id}}, 'complete'); event.stopPropagation();"
+                                    title="complete"
+                                >
+                                    <i class="uk-icon-check"></i>
+                                </button>
+                                <button 
+                                    type="button" class="uk-button uk-button-primary"
+                                    OnClick="DRApp.current.controller.action({{!todo.id}}, 'pause'); event.stopPropagation();"
+                                    title="pause"
+                                >
+                                    <i class="uk-icon-pause"></i>
+                                </button>
+                                <button 
+                                    type="button" class="uk-button uk-button-primary"
+                                    OnClick="DRApp.current.controller.action({{!todo.id}}, 'skip'); event.stopPropagation();"
+                                    title="skip"
+                                >
+                                    <i class="uk-icon-fast-forward"></i>
+                                </button>
+                                <button 
+                                    type="button" class="uk-button uk-button-primary"
+                                    OnClick="DRApp.current.controller.action({{!todo.id}}, 'expire'); event.stopPropagation();"
+                                    title="expire"
+                                >
+                                    <i class="uk-icon-hourglass-end"></i>
+                                </button>
+                            {{?}}
                         {{?}}
-                    {{??}}
-                        {{?todo.data.paused}}
-                            paused
-                            <button 
-                                type="button" class="uk-button uk-button-primary"
-                                OnClick="DRApp.current.controller.action({{!todo.id}}, 'unpause'); event.stopPropagation();"
-                                title="unpause"
-                            >
-                                <i class="uk-icon-play"></i>
-                            </button>
-                        {{??}}
-                            opened
-                            <button 
-                                type="button" class="uk-button uk-button-primary"
-                                OnClick="DRApp.current.controller.action({{!todo.id}}, 'complete'); event.stopPropagation();"
-                                title="complete"
-                            >
-                                <i class="uk-icon-check"></i>
-                            </button>
-                            <button 
-                                type="button" class="uk-button uk-button-primary"
-                                OnClick="DRApp.current.controller.action({{!todo.id}}, 'pause'); event.stopPropagation();"
-                                title="pause"
-                            >
-                                <i class="uk-icon-pause"></i>
-                            </button>
-                            <button 
-                                type="button" class="uk-button uk-button-primary"
-                                OnClick="DRApp.current.controller.action({{!todo.id}}, 'skip'); event.stopPropagation();"
-                                title="skip"
-                            >
-                                <i class="uk-icon-fast-forward"></i>
-                            </button>
-                            <button 
-                                type="button" class="uk-button uk-button-primary"
-                                OnClick="DRApp.current.controller.action({{!todo.id}}, 'expire'); event.stopPropagation();"
-                                title="expire"
-                            >
-                                <i class="uk-icon-hourglass-end"></i>
-                            </button>
-                        {{?}}
-                    {{?}}
-                </td>
-                <td>{{=(new Date(todo.updated*1000)).toLocaleString()}}</td>
-            </tr>
-            {{~}}
-        </tbody>
-    </table>
+                    </td>
+                    <td>{{=(new Date(todo.updated*1000)).toLocaleString()}}</td>
+                </tr>
+                {{~}}
+            </tbody>
+        </table>
+    </form>
 </div>
 {{#def.Footer}}
