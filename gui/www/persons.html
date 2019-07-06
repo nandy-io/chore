@@ -11,7 +11,7 @@
         </thead>
         <tbody>
             {{~it.persons :person}}
-            <tr OnClick="DRApp.go('person_retrieve','{{=person.id}}')">
+            <tr OnClick="DRApp.go('person_retrieve','{{=person.id}}')" class="clickable">
                 <td>{{=person.name}}</td>
             </tr>
             {{~}}

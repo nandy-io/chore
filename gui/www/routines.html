@@ -15,7 +15,7 @@
         <tbody>
             {{~it.routines :routine}}
                 <tr 
-                    OnClick="DRApp.go('routine_retrieve','{{=routine.id}}')"
+                    OnClick="DRApp.go('routine_retrieve','{{=routine.id}}')" class="clickable"
                 >
                     <td>{{=it.persons[routine.person_id]}}</td>
                     <td>{{=routine.name}}</td>
