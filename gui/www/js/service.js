@@ -181,6 +181,11 @@ DRApp.route("template_update","/template/{id:^\\d+$}/update","Update","Template"
 // Status
 
 DRApp.controller("Status","Base",{
+    sinces: [
+        7,
+        30,
+        90
+    ],
     persons_lookup: function() {
         this.it.persons_lookup = {};
         this.it.persons = this.rest("GET","/api/person").persons;
@@ -192,25 +197,26 @@ DRApp.controller("Status","Base",{
             }
         }
     },
-    statuses_lookup: function() {
-        this.it.statuses = this.statuses;
-        this.it.status = this.application.current.query.status;
-        for (var status = 0; status < this.it.statuses.length; status++) {
-            if (!this.it.status && this.it.statuses[status] == this.status) {
-                this.it.status = this.it.statuses[status];
-            }
-        }
-    },
     list: function() {
-        this.persons_lookup();
-        this.statuses_lookup();
         var params = {};
+
+        this.persons_lookup();
         if (this.it.person_id && this.it.person_id != 'all') {
             params.person_id = this.it.person_id;
         }
+
+        this.it.statuses = this.statuses;
+        this.it.status = this.application.current.query.status || this.status;
         if (this.it.status && this.it.status != 'all') {
             params.status = this.it.status;
         }
+
+        this.it.sinces = this.sinces;
+        this.it.since = this.application.current.query.since || this.since;
+        if (this.it.since && this.it.since != 'all') {
+            params.since = this.it.since;
+        }
+
         this.it[this.plural] = this.rest("GET",this.url(params))[this.plural];
         this.application.render(this.it);
     },
@@ -218,6 +224,7 @@ DRApp.controller("Status","Base",{
         var params = {};
         params.person_id = $("#person_id").val();
         params.status = $("#status").val();
+        params.since = $("#since").val();
         this.application.go(this.singular + '_list', params);
     },
     action: function(id, action) {
@@ -263,7 +270,8 @@ DRApp.route("area_update","/area/{id:^\\d+$}/update","Update","Area","update");
 
 DRApp.controller("Act","Value",{
     singular: "act",
-    plural: "acts"
+    plural: "acts",
+    since: 7
 });
 
 DRApp.template("Acts",DRApp.load("acts"),null,DRApp.partials);

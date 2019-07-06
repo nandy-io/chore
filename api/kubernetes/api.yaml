@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
       - name: api
-        image: docker.io/nandyio/chore-api:0.1
+        image: docker.io/nandyio/chore-api:0.2
         imagePullPolicy: Always
         env:
         - name: MYSQL_HOST

@@ -30,7 +30,17 @@
                             {{~}}
                         </select>
                     </th>
-                    <th>updated</th>
+                    <th>
+                        updated
+                        <select id="since" OnChange="DRApp.current.controller.list_change();">
+                            <option value='all'>All</option>
+                            {{~it.sinces :since}}
+                                <option value='{{!since}}' {{?it.since == since}}selected{{?}}>
+                                    since {{=since}} days
+                                </option>
+                            {{~}}
+                        </select>
+                    </th>
                 </tr>
             </thead>
             <tbody>
