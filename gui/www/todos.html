@@ -15,7 +15,7 @@
         <tbody>
             {{~it.todos :todo}}
             <tr 
-                OnClick="DRApp.go('todo_retrieve','{{=todo.id}}')"
+                OnClick="DRApp.go('todo_retrieve','{{=todo.id}}')" class="clickable"
             >
                 <td>{{=it.persons[todo.person_id]}}</td>
                 <td>{{=todo.name}}</td>

@@ -16,7 +16,7 @@
             {{~it.areas :area}}
             <tr 
                 OnClick="DRApp.go('area_retrieve','{{=area.id}}')"
-                class="uk-text-{{= area.status == 'positive' ? 'success' : 'danger'}}"
+                class="uk-text-{{= area.status == 'positive' ? 'success' : 'danger'}} clickable"
             >
                 <td>{{=area.name}}</td>
                 <td>

@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
       - name: gui
-        image: docker.io/nandyio/chore-gui:0.1
+        image: docker.io/nandyio/chore-gui:0.2
         imagePullPolicy: Always
         ports:
         - containerPort: 80

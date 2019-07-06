@@ -12,7 +12,7 @@
         </thead>
         <tbody>
             {{~it.templates :template}}
-            <tr OnClick="DRApp.go('template_retrieve','{{=template.id}}')">
+            <tr OnClick="DRApp.go('template_retrieve','{{=template.id}}')" class="clickable">
                 <td>{{=template.name}}</td>
                 <td>{{=template.kind}}</td>
             </tr>

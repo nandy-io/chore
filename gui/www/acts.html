@@ -16,7 +16,7 @@
             {{~it.acts :act}}
             <tr 
                 OnClick="DRApp.go('act_retrieve','{{=act.id}}')"
-                class="uk-text-{{= act.status == 'positive' ? 'success' : 'danger'}}"
+                class="uk-text-{{= act.status == 'positive' ? 'success' : 'danger'}} clickable"
             >
                 <td>{{=it.persons[act.person_id]}}</td>
                 <td>{{=act.name}}</td>
