@@ -2,11 +2,9 @@ apiVersion: klot.io/v1
 kind: App
 metadata:
   name: chore.nandy.io
+  version: v0.1
   description: Chore - Nandy I/O
 spec:
-  source:
-    site: github.com
-    repo: nandy-io/chore
   namespace: chore-nandy-io
   manifests:
   - path: kubernetes/namespace.yaml
@@ -15,9 +13,11 @@ spec:
   - path: daemon/kubernetes/daemon.yaml
   - path: gui/kubernetes/gui.yaml
   requires:
-  - site: github.com
+  - name: redis.klot.io
+    site: github.com
     repo: klot-io/redis
-  - site: github.com
+  - name: mysql.klot.io
+    site: github.com
     repo: klot-io/mysql
   url: 
     protocol: http
