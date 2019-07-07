@@ -14,11 +14,13 @@ spec:
   - path: gui/kubernetes/gui.yaml
   requires:
   - name: redis.klot.io
-    site: github.com
-    repo: klot-io/redis
+    source:
+      site: github.com
+      repo: klot-io/redis
   - name: mysql.klot.io
-    site: github.com
-    repo: klot-io/mysql
+    source:
+      site: github.com
+      repo: klot-io/mysql
   url: 
     protocol: http
     host: www.chore-nandy-io
