@@ -1,7 +1,7 @@
 MACHINE=$(shell uname -m)
 ACCOUNT=nandyio
 IMAGE=chore-gui
-VERSION=0.2
+VERSION?=0.2
 NAME=$(IMAGE)-$(ACCOUNT)
 NETWORK=klot.io
 VOLUMES=-v ${PWD}/www/:/opt/nandy-io/www/ \
