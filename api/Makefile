@@ -3,10 +3,10 @@ IMAGE=chore-api
 VERSION=0.1
 NAME=$(IMAGE)-$(ACCOUNT)
 NETWORK=klot.io
-VOLUMES=-v ${PWD}/secret/:/opt/nandy-io/secret/ \
-		-v ${PWD}/lib/:/opt/nandy-io/lib/ \
-		-v ${PWD}/test/:/opt/nandy-io/test/ \
-		-v ${PWD}/bin/:/opt/nandy-io/bin/
+VOLUMES=-v ${PWD}/secret/:/opt/service/secret/ \
+		-v ${PWD}/lib/:/opt/service/lib/ \
+		-v ${PWD}/test/:/opt/service/test/ \
+		-v ${PWD}/bin/:/opt/service/bin/
 ENVIRONMENT=-e SLEEP=0.1 \
 			-e MYSQL_HOST=mysql-klotio \
 			-e MYSQL_PORT=3306 \

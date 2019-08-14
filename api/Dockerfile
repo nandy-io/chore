@@ -4,9 +4,9 @@ RUN apk add git
 
 COPY entry.sh /usr/bin/entry.sh
 
-RUN mkdir -p /opt/nandy-io
+RUN mkdir -p /opt/service
 
-WORKDIR /opt/nandy-io
+WORKDIR /opt/service
 
 ADD requirements.txt .
 
@@ -16,6 +16,6 @@ ADD bin bin
 ADD lib lib
 ADD test test
 
-ENV PYTHONPATH "/opt/nandy-io/lib:/opt/nandy-io/test:${PYTHONPATH}"
+ENV PYTHONPATH "/opt/service/lib:/opt/service/test:${PYTHONPATH}"
 
-CMD "/opt/nandy-io/bin/api.py"
+CMD "/opt/service/bin/api.py"

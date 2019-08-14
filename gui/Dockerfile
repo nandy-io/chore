@@ -3,8 +3,8 @@ FROM ${BASE}
 
 COPY etc/kubernetes.conf /etc/nginx/conf.d/default.conf
 
-RUN mkdir -p /opt/nandy-io
+RUN mkdir -p /opt/service
 
-WORKDIR /opt/nandy-io
+WORKDIR /opt/service
 
 ADD www www
