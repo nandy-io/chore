@@ -21,17 +21,17 @@ spec:
       site: github.com
       repo: klot-io/mysql
   recommends:
-  - name: chore-speech.klot.io
+  - name: chore-speech.nandy.io
     source:
       site: github.com
       repo: nandy-io/chore-speech
       version: gaf3/klot-22-app-settings
-  - name: chore-button.klot.io
+  - name: chore-button.nandy.io
     source:
       site: github.com
       repo: nandy-io/chore-button
       version: gaf3/klot-21-app-settings
-  - name: chore-slack.klot.io
+  - name: chore-slack.nandy.io
     source:
       site: github.com
       repo: nandy-io/chore-slack
