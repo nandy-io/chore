@@ -103,7 +103,7 @@ def validate(fields):
             valid = False
 
     return valid
-            
+
 def model_in(converted):
 
     fields = {}
@@ -381,7 +381,7 @@ class Status(Model):
         if "template" in kwargs and isinstance(kwargs["template"], dict):
 
             data = kwargs["template"]
-            
+
         else:
 
             template = None
@@ -408,7 +408,7 @@ class Status(Model):
 
         if data:
             fields["data"].update(copy.deepcopy(data))
-        
+
         if "data" in kwargs:
             fields["data"].update(copy.deepcopy(kwargs["data"]))
 
@@ -530,7 +530,7 @@ class StatusCL(RestCL):
         ).filter_by(
             **filter_by
         )
-        
+
         if since is not None:
             models = models.filter(
                 self.MODEL.updated>time.time()-since*60*60*24
@@ -539,7 +539,7 @@ class StatusCL(RestCL):
         models = models.order_by(
             *self.ORDER
         ).all()
-        
+
         flask.request.session.commit()
 
         return {self.PLURAL: models_out(models)}
@@ -821,7 +821,7 @@ class State(Status):
             cls.notify("uncomplete", model)
 
             return True
-        
+
         return False
 
     @classmethod
@@ -991,13 +991,13 @@ class Routine(State):
                 *ToDo.ORDER
             ).all():
                 tasks.append({
-                    "text": todo.data["text"],
+                    "text": todo.data.get("text", todo.name),
                     "todo": todo.id
                 })
 
             if "tasks" in fields["data"]:
                 tasks.extend(fields["data"]["tasks"])
-            
+
             fields["data"]["tasks"] = tasks
 
         if "tasks" in fields["data"]:
@@ -1056,7 +1056,7 @@ class Routine(State):
     def next(cls, routine):
         """
         Completes the current task and starts the next. This is used
-        with a button press.  
+        with a button press.
         """
 
         for task in routine.data["tasks"]:
@@ -1098,7 +1098,7 @@ class Task:
 
         routine.data["notified"] = time.time()
         routine.updated = time.time()
-        task["notified"] = time.time() 
+        task["notified"] = time.time()
 
         notify({
             "kind": "task",
@@ -1124,7 +1124,7 @@ class Task:
         Pauses a task
         """
 
-        # Pause if it isn't. 
+        # Pause if it isn't.
 
         if "paused" not in task or not task["paused"]:
 
@@ -1165,7 +1165,7 @@ class Task:
 
             if "start" not in task:
                 task["start"] = task["end"]
-                
+
             cls.notify("skip", task, routine)
 
             Routine.check(routine)
@@ -1223,7 +1223,7 @@ class Task:
         """
 
         if "end" in task:
-    
+
             del task["end"]
             cls.notify("uncomplete", task, routine)
 
