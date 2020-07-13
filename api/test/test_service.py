@@ -301,66 +301,6 @@ class TestService(TestRest):
             }
         ])
 
-    def test_model_in(self):
-
-        self.assertEqual(service.model_in({
-            "a": 1,
-            "yaml": yaml.dump({"b": 2})
-        }), {
-            "a": 1,
-            "data": {
-                "b": 2
-            }
-        })
-
-    def test_model_out(self):
-
-        area = self.sample.area(
-            "unit",
-            name="a", 
-            status="positive", 
-            created=2,
-            updated=3,
-            data={"d": 4}
-        )
-
-        self.assertEqual(service.model_out(area), {
-            "id": area.id,
-            "person_id": area.person.id,
-            "name": "a",
-            "status": "positive",
-            "created": 2,
-            "updated": 3,
-            "data": {
-                "d": 4
-            },
-            "yaml": yaml.dump({"d": 4}, default_flow_style=False)
-        })
-
-    def test_models_out(self):
-
-        area = self.sample.area(
-            "unit",
-            name="a", 
-            status="positive", 
-            created=2,
-            updated=3,
-            data={"d": 4}
-        )
-
-        self.assertEqual(service.models_out([area]), [{
-            "id": area.id,
-            "person_id": area.person.id,
-            "name": "a",
-            "status": "positive",
-            "created": 2,
-            "updated": 3,
-            "data": {
-                "d": 4
-            },
-            "yaml": yaml.dump({"d": 4}, default_flow_style=False)
-        }])
-
     @unittest.mock.patch("flask.current_app")
     def test_notify(self, mock_request):
 
@@ -380,8 +320,70 @@ class TestHealth(TestRest):
         self.assertEqual(self.api.get("/health").json, {"message": "OK"})
 
 
+class TestModel(TestRest):
+
+    def test_request(self):
+
+        self.assertEqual(service.Model.request({
+            "a": 1,
+            "yaml": yaml.dump({"b": 2})
+        }), {
+            "a": 1,
+            "data": {
+                "b": 2
+            }
+        })
+
+    def test_response(self):
+
+        area = self.sample.area(
+            "unit",
+            name="a",
+            status="positive",
+            created=2,
+            updated=3,
+            data={"d": 4}
+        )
+
+        self.assertEqual(service.Model.response(area), {
+            "id": area.id,
+            "person_id": area.person.id,
+            "name": "a",
+            "status": "positive",
+            "created": 2,
+            "updated": 3,
+            "data": {
+                "d": 4
+            },
+            "yaml": yaml.dump({"d": 4}, default_flow_style=False)
+        })
+
+    def test_responses(self):
+
+        area = self.sample.area(
+            "unit",
+            name="a",
+            status="positive",
+            created=2,
+            updated=3,
+            data={"d": 4}
+        )
+
+        self.assertEqual(service.Model.responses([area]), [{
+            "id": area.id,
+            "person_id": area.person.id,
+            "name": "a",
+            "status": "positive",
+            "created": 2,
+            "updated": 3,
+            "data": {
+                "d": 4
+            },
+            "yaml": yaml.dump({"d": 4}, default_flow_style=False)
+        }])
+
 class TestPerson(TestRest):
-    
+
     def test_validate(self):
 
         fields = service.PersonCL.fields(values={"yaml": "a:1"})
@@ -449,7 +451,7 @@ class TestPerson(TestRest):
 class TestPersonCL(TestRest):
 
     def test_fields(self):
-        
+
         self.assertEqual(service.PersonCL.fields().to_list(), [
             {
                 "name": "name"
@@ -543,7 +545,7 @@ class TestPersonCL(TestRest):
 class TestPersonRUD(TestRest):
 
     def test_fields(self):
-        
+
         self.assertEqual(service.PersonRUD.fields().to_list(), [
             {
                 "name": "id",
@@ -771,7 +773,7 @@ class TestTemplate(TestRest):
 class TestTemplateCL(TestRest):
 
     def test_fields(self):
-        
+
         self.assertEqual(service.TemplateCL.fields().to_list(), [
             {
                 "name": "name"
@@ -907,7 +909,7 @@ class TestTemplateCL(TestRest):
 class TestTemplateRUD(TestRest):
 
     def test_fields(self):
-        
+
         self.assertEqual(service.TemplateRUD.fields().to_list(), [
             {
                 "name": "id",
@@ -1208,7 +1210,7 @@ class TestArea(TestRest):
 
         person = self.sample.person("unit")
 
-        # basic 
+        # basic
 
         self.assertEqual(service.Area.build(**{
             "template_id": 0,
@@ -1309,8 +1311,8 @@ class TestArea(TestRest):
         mock_notify.assert_called_once_with({
             "kind": "area",
             "action": "test",
-            "area": service.model_out(model),
-            "person": service.model_out(model.person)
+            "area": service.Area.response(model),
+            "person": service.Person.response(model.person)
         })
 
     @unittest.mock.patch("flask.request")
@@ -1348,8 +1350,8 @@ class TestArea(TestRest):
         mock_notify.assert_called_once_with({
             "kind": "area",
             "action": "create",
-            "area": service.model_out(model),
-            "person": service.model_out(model.person)
+            "area": service.Area.response(model),
+            "person": service.Person.response(model.person)
         })
 
     @unittest.mock.patch("flask.request")
@@ -2045,7 +2047,7 @@ class TestAct(TestRest):
 
         person = self.sample.person("unit")
 
-        # basic 
+        # basic
 
         self.assertEqual(service.Act.build(**{
             "template_id": 0,
@@ -2147,8 +2149,8 @@ class TestAct(TestRest):
         mock_notify.assert_called_once_with({
             "kind": "act",
             "action": "test",
-            "act": service.model_out(model),
-            "person": service.model_out(model.person)
+            "act": service.Act.response(model),
+            "person": service.Person.response(model.person)
         })
 
     @unittest.mock.patch("flask.request")
@@ -2200,14 +2202,14 @@ class TestAct(TestRest):
             unittest.mock.call({
                 "kind": "act",
                 "action": "create",
-                "act": service.model_out(model),
-                "person": service.model_out(model.person)
+                "act": service.Act.response(model),
+                "person": service.Person.response(model.person)
             }),
             unittest.mock.call({
                 "kind": "todo",
                 "action": "create",
-                "todo": service.model_out(todo),
-                "person": service.model_out(todo.person)
+                "todo": service.ToDo.response(todo),
+                "person": service.Person.response(todo.person)
             })
         ])
 
@@ -2909,7 +2911,7 @@ class TestToDo(TestRest):
 
         person = self.sample.person("unit")
 
-        # basic 
+        # basic
 
         self.assertEqual(service.ToDo.build(**{
             "template_id": 0,
@@ -3010,8 +3012,8 @@ class TestToDo(TestRest):
         mock_notify.assert_called_once_with({
             "kind": "todo",
             "action": "test",
-            "todo": service.model_out(model),
-            "person": service.model_out(model.person)
+            "todo": service.ToDo.response(model),
+            "person": service.Person.response(model.person)
         })
 
     @unittest.mock.patch("flask.request")
@@ -3049,8 +3051,8 @@ class TestToDo(TestRest):
         mock_notify.assert_called_once_with({
             "kind": "todo",
             "action": "create",
-            "todo": service.model_out(model),
-            "person": service.model_out(model.person)
+            "todo": service.ToDo.response(model),
+            "person": service.Person.response(model.person)
         })
 
     @unittest.mock.patch("flask.request")
@@ -3081,9 +3083,9 @@ class TestToDo(TestRest):
         mock_notify.assert_called_once_with({
             "kind": "todos",
             "action": "remind",
-            "person": service.model_out(person),
+            "person": service.Person.response(person),
             "speech": {},
-            "todos": service.models_out([todo])
+            "todos": service.ToDo.responses([todo])
         })
 
         self.assertTrue(service.ToDo.todos({
@@ -3095,9 +3097,9 @@ class TestToDo(TestRest):
         mock_notify.assert_called_with({
             "kind": "todos",
             "action": "remind",
-            "person": service.model_out(person),
+            "person": service.Person.response(person),
             "speech": {"language": "cursing"},
-            "todos": service.models_out([todo])
+            "todos": service.ToDo.responses([todo])
         })
 
     @unittest.mock.patch("service.time.time", unittest.mock.MagicMock(return_value=7))
@@ -4011,7 +4013,7 @@ class TestRoutine(TestRest):
 
         person = self.sample.person("unit")
 
-        # basic 
+        # basic
 
         self.assertEqual(service.Routine.build(**{
             "template_id": 0,
@@ -4110,7 +4112,7 @@ class TestRoutine(TestRest):
         self.sample.todo("unit", status="closed")
         self.sample.todo("test")
 
-        # explicit 
+        # explicit
 
         self.assertEqual(service.Routine.tasks(service.Routine.build(**{
             "template_id": 0,
@@ -4225,8 +4227,8 @@ class TestRoutine(TestRest):
         mock_notify.assert_called_once_with({
             "kind": "routine",
             "action": "test",
-            "routine": service.model_out(model),
-            "person": service.model_out(model.person)
+            "routine": service.Routine.response(model),
+            "person": service.Person.response(model.person)
         })
 
     @unittest.mock.patch("service.time.time", unittest.mock.MagicMock(return_value=7))
@@ -4259,8 +4261,8 @@ class TestRoutine(TestRest):
             "kind": "task",
             "action": "start",
             "task": routine.data["tasks"][0],
-            "routine": service.model_out(routine),
-            "person": service.model_out(routine.person)
+            "routine": service.Routine.response(routine),
+            "person": service.Person.response(routine.person)
         })
 
         service.Routine.check(routine)
@@ -4269,8 +4271,8 @@ class TestRoutine(TestRest):
             "kind": "task",
             "action": "start",
             "task": routine.data["tasks"][0],
-            "routine": service.model_out(routine),
-            "person": service.model_out(routine.person)
+            "routine": service.Routine.response(routine),
+            "person": service.Person.response(routine.person)
         })
 
         routine.data["tasks"][0]["end"] = 0
@@ -4283,8 +4285,8 @@ class TestRoutine(TestRest):
             "kind": "task",
             "action": "pause",
             "task": routine.data["tasks"][1],
-            "routine": service.model_out(routine),
-            "person": service.model_out(routine.person)
+            "routine": service.Routine.response(routine),
+            "person": service.Person.response(routine.person)
         })
 
         routine.data["tasks"][1]["end"] = 0
@@ -5141,8 +5143,8 @@ class TestTask(TestRest):
             "kind": "task",
             "action": "test",
             "task": routine.data["tasks"][0],
-            "routine": service.model_out(routine),
-            "person": service.model_out(routine.person)
+            "routine": service.Routine.response(routine),
+            "person": service.Person.response(routine.person)
         })
 
     @unittest.mock.patch("service.time.time", unittest.mock.MagicMock(return_value=7))
@@ -5283,7 +5285,7 @@ class TestTask(TestRest):
         self.assertFalse(service.Task.complete(routine.data["tasks"][0], routine))
         mock_task_notify.assert_called_once()
         mock_routine_notify.assert_called_once()
-    
+
     @unittest.mock.patch("flask.request")
     @unittest.mock.patch("service.time.time", unittest.mock.MagicMock(return_value=7))
     @unittest.mock.patch("service.Task.notify")
