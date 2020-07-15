@@ -1,5 +1,6 @@
 import os
 import time
+import glob
 import copy
 import json
 import yaml
@@ -13,7 +14,6 @@ import flask_restful
 import sqlalchemy.exc
 
 import opengui
-import pykube
 
 import mysql
 
@@ -25,11 +25,6 @@ def app():
 
     app.redis = redis.StrictRedis(host=os.environ['REDIS_HOST'], port=int(os.environ['REDIS_PORT']))
     app.channel = os.environ['REDIS_CHANNEL']
-
-    if os.path.exists("/var/run/secrets/kubernetes.io/serviceaccount/token"):
-        app.kube = pykube.HTTPClient(pykube.KubeConfig.from_service_account())
-    else:
-        app.kube = pykube.HTTPClient(pykube.KubeConfig.from_url("http://host.docker.internal:7580"))
 
     api = flask_restful.Api(app)
 
@@ -140,31 +135,89 @@ class Model:
         flask.request.session.commit()
         return model
 
+    @staticmethod
+    def derive(integrate):
+
+        if "url" in integrate:
+            response = requests.options(integrate["url"])
+        elif "node" in integrate:
+            response = requests.options(f"http://{os.environ['NODE_NAME']}.local/node", params=integrate["node"])
+
+        response.raise_for_status()
+
+        return response.json()
+
+    @classmethod
+    def integrate(cls, integration):
+
+        if "integrate" in integration:
+            try:
+                integration.update(cls.derive(integration["integrate"]))
+            except Exception as exception:
+                integration.setdefault("errors", [])
+                integration["errors"].append(f"failed to integrate: {exception}")
+
+        for field in integration.get("fields", []):
+            cls.integrate(field)
+
+        return integration
+
+    @classmethod
+    def integrations(cls):
+
+        integrations = []
+
+        for integration_path in sorted(glob.glob(f"/opt/service/config/integration_*_{cls.SINGULAR}.fields.yaml")):
+            with open(integration_path, "r") as integration_file:
+                integrations.append(cls.integrate({**{"name": integration_path.split("_")[1], **yaml.safe_load(integration_file)}}))
+
+        return integrations
+
     @classmethod
     def request(cls, converted):
 
         values = {}
 
+        integrations = opengui.Fields({}, {}, cls.integrations())
+
         for field in converted.keys():
 
-            if field == "yaml":
-                values["data"] = yaml.safe_load(converted[field])
-            else:
+            if field in integrations.names:
+                values.setdefault("data", {})
+                values["data"][field] = converted[field]
+            elif field != "yaml":
                 values[field] = converted[field]
+
+        if "yaml" in converted:
+            values.setdefault("data", {})
+            values["data"].update(yaml.safe_load(converted["yaml"]))
+
+        if "data" in converted:
+            values.setdefault("data", {})
+            values["data"].update(converted["data"])
 
         return values
 
     @classmethod
     def response(cls, model):
 
-        converted = {}
+        converted = {
+            "data": {}
+        }
+
+        integrations = opengui.Fields({}, {}, cls.integrations())
 
         for field in model.__table__.columns._data.keys():
+            if field != "data":
+                converted[field] = getattr(model, field)
 
-            converted[field] = getattr(model, field)
+        for field in model.data:
+            if field in integrations.names:
+                converted[field] = model.data[field]
+            else:
+                converted["data"][field] = model.data[field]
 
-            if field == "data":
-                converted["yaml"] = yaml.safe_dump(dict(converted[field]), default_flow_style=False)
+        converted["yaml"] = yaml.safe_dump(dict(converted["data"]), default_flow_style=False)
 
         return converted
 
@@ -178,7 +231,7 @@ class RestCL(flask_restful.Resource):
     @classmethod
     def fields(cls, values=None, originals=None):
 
-        return opengui.Fields(values, originals=originals, fields=copy.deepcopy(cls.FIELDS + cls.YAML))
+        return opengui.Fields(values, originals=originals, fields=copy.deepcopy(cls.FIELDS + cls.integrations() + cls.YAML))
 
     @require_session
     def options(self):
@@ -227,7 +280,7 @@ class RestRUD(flask_restful.Resource):
     @classmethod
     def fields(cls, values=None, originals=None):
 
-        return opengui.Fields(values, originals=originals, fields=copy.deepcopy(cls.ID + cls.FIELDS + cls.YAML))
+        return opengui.Fields(values, originals=originals, fields=copy.deepcopy(cls.ID + cls.FIELDS + cls.integrations() + cls.YAML))
 
     @require_session
     def options(self, id):
@@ -338,13 +391,6 @@ class Template(Model):
         }
     ]
 
-    YAML = [
-        {
-            "name": "yaml",
-            "style": "textarea"
-        }
-    ]
-
     @classmethod
     def choices(cls, kind):
 
@@ -440,7 +486,7 @@ class Status(Model):
     @classmethod
     def notify(cls, action, model):
         """
-        Notifies somethign happened
+        Notifies something happened
         """
 
         model.data["notified"] = time.time()
@@ -492,12 +538,11 @@ class StatusCL(RestCL):
     @classmethod
     def fields(cls, values=None, originals=None):
 
-
         fields = opengui.Fields(values, originals=originals, fields=cls.FIELDS + cls.YAML)
 
-        fields["person_id"].options, fields["person_id"].labels = Person.choices()
+        fields["person_id"].options, fields["person_id"].content["labels"] = Person.choices()
         fields["status"].options = cls.STATUSES
-        fields["template_id"].options, fields["template_id"].labels = Template.choices(cls.SINGULAR)
+        fields["template_id"].options, fields["template_id"].content["labels"] = Template.choices(cls.SINGULAR)
 
         if fields["template_id"].value:
 
@@ -578,7 +623,7 @@ class StatusRUD(RestRUD):
 
         fields = opengui.Fields(values, originals=originals, fields=cls.ID + cls.FIELDS + cls.YAML)
 
-        fields["person_id"].options, fields["person_id"].labels = Person.choices()
+        fields["person_id"].options, fields["person_id"].content["labels"] = Person.choices()
         fields["status"].options = cls.STATUSES
 
         return fields

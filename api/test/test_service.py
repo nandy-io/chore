@@ -40,9 +40,6 @@ class TestRest(unittest.TestCase):
         "REDIS_CHANNEL": "stuff"
     })
     @unittest.mock.patch("redis.StrictRedis", MockRedis)
-    @unittest.mock.patch("os.path.exists", unittest.mock.MagicMock(return_value=True))
-    @unittest.mock.patch("pykube.HTTPClient", unittest.mock.MagicMock)
-    @unittest.mock.patch("pykube.KubeConfig.from_service_account", unittest.mock.MagicMock)
     def setUpClass(cls):
 
         cls.app = service.app()
@@ -133,27 +130,15 @@ class TestService(TestRest):
         "REDIS_CHANNEL": "stuff"
     })
     @unittest.mock.patch("redis.StrictRedis", MockRedis)
-    @unittest.mock.patch("os.path.exists")
-    @unittest.mock.patch("pykube.KubeConfig.from_file")
-    @unittest.mock.patch("pykube.KubeConfig.from_service_account")
-    @unittest.mock.patch("pykube.KubeConfig.from_url")
-    @unittest.mock.patch("pykube.HTTPClient", unittest.mock.MagicMock)
-    def test_app(self, mock_url, mock_account, mock_file, mock_exists):
+    def test_app(self):
 
-        mock_exists.return_value = True
         app = service.app()
 
         self.assertEqual(app.redis.host, "most.com")
         self.assertEqual(app.redis.port, 667)
         self.assertEqual(app.channel, "stuff")
 
-        mock_exists.assert_called_once_with("/var/run/secrets/kubernetes.io/serviceaccount/token")
-        mock_account.assert_called_once()
-
-        mock_exists.return_value = False
         app = service.app()
-
-        mock_url.assert_called_once_with("http://host.docker.internal:7580")
 
     def test_require_session(self):
 
@@ -319,22 +304,262 @@ class TestHealth(TestRest):
 
         self.assertEqual(self.api.get("/health").json, {"message": "OK"})
 
+class MockModel(service.Model):
+
+    MODEL = "Mock"
+    SINGULAR = "mock"
 
 class TestModel(TestRest):
 
-    def test_request(self):
+    def test_validate(self):
 
-        self.assertEqual(service.Model.request({
+        fields = opengui.Fields(fields=[
+            {
+                "name": "name",
+                "value": "yup"
+            },
+            {
+                "name": "yaml",
+                "style": "textarea",
+                "value": "a: 1"
+            }
+        ])
+        self.assertTrue(MockModel.validate(fields))
+        self.assertFields(fields, [
+            {
+                "name": "name",
+                "value": "yup"
+            },
+            {
+                "name": "yaml",
+                "style": "textarea",
+                "value": "a: 1"
+            }
+        ])
+
+    @unittest.mock.patch("flask.request")
+    def test_retrieve(self, mock_request):
+
+        mock_request.session.query.return_value.get.return_value = "yep"
+
+        self.assertEqual(MockModel.retrieve(1), "yep")
+
+        mock_request.session.query.assert_called_once_with("Mock")
+        mock_request.session.query.return_value.get.assert_called_once_with(1)
+        mock_request.session.commit.assert_called_once_with()
+
+    @unittest.mock.patch.dict(os.environ, {
+        "NODE_NAME": "barry"
+    })
+    @unittest.mock.patch("requests.options")
+    def test_service(self, mock_options):
+
+        mock_options.return_value.json.return_value = "yep"
+
+        self.assertEqual(MockModel.derive({"url": "sure"}), "yep")
+        mock_options.assert_has_calls([
+            unittest.mock.call("sure"),
+            unittest.mock.call().raise_for_status(),
+            unittest.mock.call().json()
+        ])
+
+        self.assertEqual(MockModel.derive({"node": "sure"}), "yep")
+        mock_options.assert_has_calls([
+            unittest.mock.call("http://barry.local/node", params="sure"),
+            unittest.mock.call().raise_for_status(),
+            unittest.mock.call().json()
+        ])
+
+    @unittest.mock.patch.dict(os.environ, {
+        "NODE_NAME": "barry"
+    })
+    @unittest.mock.patch("requests.options")
+    def test_service(self, mock_options):
+
+        def options(url, params=None):
+
+            response = unittest.mock.MagicMock()
+
+            if url == "sure":
+
+                response.json.return_value = {
+                    "fields": [
+                        {
+                            "integrate": {
+                                "node": "yep"
+                            }
+                        },
+                        {
+                            "integrate": {
+                                "url": "nope"
+                            }
+                        }
+                    ]
+                }
+
+            elif url == "http://barry.local/node" and params == "yep":
+
+                response.json.return_value = {
+                    "name": "master"
+                }
+
+            elif url == "nope":
+
+                response.raise_for_status.side_effect = Exception("whoops")
+
+            return response
+
+        mock_options.side_effect = options
+
+        self.assertEqual(MockModel.integrate({
+            "integrate": {
+                "url": "sure"
+            }
+        }), {
+            "integrate": {
+                "url": "sure"
+            },
+            "fields": [
+                {
+                    "integrate": {
+                        "node": "yep"
+                    },
+                    "name": "master"
+                },
+                {
+                    "integrate": {
+                        "url": "nope"
+                    },
+                    "errors": ["failed to integrate: whoops"]
+                }
+            ]
+        })
+
+    @unittest.mock.patch("glob.glob")
+    @unittest.mock.patch("service.open", create=True)
+    @unittest.mock.patch.dict(os.environ, {
+        "NODE_NAME": "barry"
+    })
+    @unittest.mock.patch("requests.options")
+    def test_integrations(self, mock_options, mock_open, mock_glob):
+
+        mock_glob.return_value = ["/opt/service/config/integration_unit.test_mock.fields.yaml"]
+
+        mock_open.side_effect = [
+            unittest.mock.mock_open(read_data=yaml.safe_dump({
+                "integrate": {
+                    "url": "sure"
+                }
+            })).return_value
+        ]
+
+        def options(url, params=None):
+
+            response = unittest.mock.MagicMock()
+
+            if url == "sure":
+
+                response.json.return_value = {
+                    "fields": [
+                        {
+                            "integrate": {
+                                "node": "yep"
+                            }
+                        },
+                        {
+                            "integrate": {
+                                "url": "nope"
+                            }
+                        }
+                    ]
+                }
+
+            elif url == "http://barry.local/node" and params == "yep":
+
+                response.json.return_value = {
+                    "name": "master"
+                }
+
+            elif url == "nope":
+
+                response.raise_for_status.side_effect = Exception("whoops")
+
+            return response
+
+        mock_options.side_effect = options
+
+        self.assertEqual(MockModel.integrations(), [
+            {
+                "name": "unit.test",
+                "integrate": {
+                    "url": "sure"
+                },
+                "fields": [
+                    {
+                        "integrate": {
+                            "node": "yep"
+                        },
+                        "name": "master"
+                    },
+                    {
+                        "integrate": {
+                            "url": "nope"
+                        },
+                        "errors": ["failed to integrate: whoops"]
+                    }
+                ]
+            }
+        ])
+
+        mock_glob.assert_called_once_with("/opt/service/config/integration_*_mock.fields.yaml")
+
+        mock_open.assert_called_once_with("/opt/service/config/integration_unit.test_mock.fields.yaml", "r")
+
+    @unittest.mock.patch("glob.glob")
+    @unittest.mock.patch("service.open", create=True)
+    def test_request(self, mock_open, mock_glob):
+
+        mock_glob.return_value = ["/opt/service/config/integration_unit.test_mock.fields.yaml"]
+
+        mock_open.side_effect = [
+            unittest.mock.mock_open(read_data=yaml.safe_dump({
+                "description": "Mock integraton",
+                "fields": [{
+                    "name": "integrate"
+                }]
+            })).return_value
+        ]
+
+        self.assertEqual(MockModel.request({
             "a": 1,
+            "unit.test": {
+                "integrate": "yep"
+            },
             "yaml": yaml.dump({"b": 2})
         }), {
             "a": 1,
             "data": {
-                "b": 2
+                "b": 2,
+                "unit.test": {
+                    "integrate": "yep"
+                }
             }
         })
 
-    def test_response(self):
+    @unittest.mock.patch("glob.glob")
+    @unittest.mock.patch("service.open", create=True)
+    def test_response(self, mock_open, mock_glob):
+
+        mock_glob.return_value = ["/opt/service/config/integration_unit.test_mock.fields.yaml"]
+
+        mock_open.side_effect = [
+            unittest.mock.mock_open(read_data=yaml.safe_dump({
+                "description": "Mock integraton",
+                "fields": [{
+                    "name": "integrate"
+                }]
+            })).return_value
+        ]
 
         area = self.sample.area(
             "unit",
@@ -342,23 +567,44 @@ class TestModel(TestRest):
             status="positive",
             created=2,
             updated=3,
-            data={"d": 4}
+            data={
+                "d": 4,
+                "unit.test": {
+                    "integrate": "yep"
+                }
+            }
         )
 
-        self.assertEqual(service.Model.response(area), {
+        self.assertEqual(MockModel.response(area), {
             "id": area.id,
             "person_id": area.person.id,
             "name": "a",
             "status": "positive",
             "created": 2,
             "updated": 3,
+            "unit.test": {
+                "integrate": "yep"
+            },
             "data": {
                 "d": 4
             },
             "yaml": yaml.dump({"d": 4}, default_flow_style=False)
         })
 
-    def test_responses(self):
+    @unittest.mock.patch("glob.glob")
+    @unittest.mock.patch("service.open", create=True)
+    def test_responses(self, mock_open, mock_glob):
+
+        mock_glob.return_value = ["/opt/service/config/integration_unit.test_mock.fields.yaml"]
+
+        mock_open.side_effect = [
+            unittest.mock.mock_open(read_data=yaml.safe_dump({
+                "description": "Mock integraton",
+                "fields": [{
+                    "name": "integrate"
+                }]
+            })).return_value
+        ]
 
         area = self.sample.area(
             "unit",
@@ -366,16 +612,24 @@ class TestModel(TestRest):
             status="positive",
             created=2,
             updated=3,
-            data={"d": 4}
+            data={
+                "d": 4,
+                "unit.test": {
+                    "integrate": "yep"
+                }
+            }
         )
 
-        self.assertEqual(service.Model.responses([area]), [{
+        self.assertEqual(MockModel.responses([area]), [{
             "id": area.id,
             "person_id": area.person.id,
             "name": "a",
             "status": "positive",
             "created": 2,
             "updated": 3,
+            "unit.test": {
+                "integrate": "yep"
+            },
             "data": {
                 "d": 4
             },
@@ -696,7 +950,7 @@ class TestTemplate(TestRest):
             {
                 "name": "yaml",
                 "style": "textarea",
-                "errors": ["missing value"]
+                "optional": True
             }
         ])
 
@@ -735,7 +989,7 @@ class TestTemplate(TestRest):
             {
                 "name": "yaml",
                 "style": "textarea",
-                "errors": ["missing value"]
+                "optional": True
             }
         ])
 
@@ -790,7 +1044,8 @@ class TestTemplateCL(TestRest):
             },
             {
                 "name": "yaml",
-                "style": "textarea"
+                "style": "textarea",
+                "optional": True
             }
         ])
 
@@ -814,7 +1069,8 @@ class TestTemplateCL(TestRest):
             },
             {
                 "name": "yaml",
-                "style": "textarea"
+                "style": "textarea",
+                "optional": True
             }
         ])
 
@@ -841,7 +1097,7 @@ class TestTemplateCL(TestRest):
             {
                 "name": "yaml",
                 "style": "textarea",
-                "errors": ["missing value"]
+                "optional": True
             }
         ], [
             "unknown field 'nope'"
@@ -872,6 +1128,7 @@ class TestTemplateCL(TestRest):
             {
                 "name": "yaml",
                 "style": "textarea",
+                "optional": True,
                 "value": '"a": 1'
             }
         ])
@@ -930,7 +1187,8 @@ class TestTemplateRUD(TestRest):
             },
             {
                 "name": "yaml",
-                "style": "textarea"
+                "style": "textarea",
+                "optional": True
             }
         ])
 
@@ -967,6 +1225,7 @@ class TestTemplateRUD(TestRest):
             {
                 "name": "yaml",
                 "style": "textarea",
+                "optional": True,
                 "value": "a: 1\n",
                 "original": "a: 1\n"
             }
@@ -1003,8 +1262,8 @@ class TestTemplateRUD(TestRest):
             {
                 "name": "yaml",
                 "style": "textarea",
-                "original": "a: 1\n",
-                "errors": ["missing value"]
+                "optional": True,
+                "original": "a: 1\n"
             }
         ], [
             "unknown field 'nope'"
@@ -1043,6 +1302,7 @@ class TestTemplateRUD(TestRest):
             {
                 "name": "yaml",
                 "style": "textarea",
+                "optional": True,
                 "value": "b: 2",
                 "original": "a: 1\n"
             }

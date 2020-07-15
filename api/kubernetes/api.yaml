@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
       - name: api
-        image: docker.io/nandyio/chore-api:0.2
+        image: docker.io/nandyio/chore-api:0.3
         imagePullPolicy: Always
         env:
         - name: MYSQL_HOST
@@ -30,6 +30,10 @@ spec:
           value: "6379"
         - name: REDIS_CHANNEL
           value: nandy.io/chore
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
         ports:
         - containerPort: 80
         readinessProbe:
