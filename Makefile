@@ -1,4 +1,4 @@
-VERSION?=0.4
+VERSION?=0.3
 .PHONY: install update remove reset tag untag
 
 install:
