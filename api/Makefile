@@ -1,6 +1,6 @@
 ACCOUNT=nandyio
 IMAGE=chore-api
-VERSION=0.3
+VERSION=0.2
 NAME=$(IMAGE)-$(ACCOUNT)
 NETWORK=klot.io
 VOLUMES=-v ${PWD}/secret/:/opt/service/secret/ \
