@@ -84,6 +84,7 @@ DRApp.controller("Base",null,{
                 values[field.name] = $('#' + full_name).val();
             }
         }
+        values["yaml"] = values["yaml"] || '{}';
         return values;
     },
     fields_request: function() {
