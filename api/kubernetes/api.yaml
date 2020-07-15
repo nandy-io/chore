@@ -47,6 +47,13 @@ spec:
           httpGet:
             path: /health
             port: 80
+        volumeMounts:
+        - name: config
+          mountPath: /opt/service/config
+      volumes:
+        - name: config
+          configMap:
+            name: config
 ---
 kind: Service
 apiVersion: v1
