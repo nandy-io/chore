@@ -83,8 +83,10 @@ DRApp.controller("Base",null,{
             } else {
                 values[field.name] = $('#' + full_name).val();
             }
+            if (field.name == "yaml" && values[field.name] == "") {
+                values[field.name] = "{}";
+            }
         }
-        values["yaml"] = values["yaml"] || '{}';
         return values;
     },
     fields_request: function() {
