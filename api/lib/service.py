@@ -387,9 +387,70 @@ class Template(Model):
                 "todo",
                 "routine"
             ],
-            "style": "radios"
+            "style": "radios",
+            "trigger": True
         }
     ]
+
+    @classmethod
+    def integrations(cls, form):
+
+        integrations = []
+
+        if form in ["template", "area", "act", "todo", "routine"]:
+            for integration_path in sorted(glob.glob(f"/opt/service/config/integration_*_{form}.fields.yaml")):
+                with open(integration_path, "r") as integration_file:
+                    integrations.append(cls.integrate({**{"name": integration_path.split("_")[1], **yaml.safe_load(integration_file)}}))
+
+        return integrations
+
+    @classmethod
+    def request(cls, converted):
+
+        values = {}
+
+        integrations = opengui.Fields({}, {}, cls.integrations(converted.get("kind", "template")))
+
+        for field in converted.keys():
+
+            if field in integrations.names:
+                values.setdefault("data", {})
+                values["data"][field] = converted[field]
+            elif field != "yaml":
+                values[field] = converted[field]
+
+        if "yaml" in converted:
+            values.setdefault("data", {})
+            values["data"].update(yaml.safe_load(converted["yaml"]))
+
+        if "data" in converted:
+            values.setdefault("data", {})
+            values["data"].update(converted["data"])
+
+        return values
+
+    @classmethod
+    def response(cls, model):
+
+        converted = {
+            "data": {}
+        }
+
+        integrations = opengui.Fields({}, {}, cls.integrations(model.kind or "template"))
+
+        for field in model.__table__.columns._data.keys():
+            if field != "data":
+                converted[field] = getattr(model, field)
+
+        for field in model.data:
+            if field in integrations.names:
+                converted[field] = model.data[field]
+            else:
+                converted["data"][field] = model.data[field]
+
+        converted["yaml"] = yaml.safe_dump(dict(converted["data"]), default_flow_style=False)
+
+        return converted
 
     @classmethod
     def choices(cls, kind):
@@ -411,11 +472,30 @@ class Template(Model):
 
         return (ids, labels)
 
+    @staticmethod
+    def form(values, originals):
+
+        if values and "kind" in values:
+            return values["kind"]
+
+        if originals and "kind" in originals:
+            return originals["kind"]
+
+        return "template"
+
 class TemplateCL(Template, RestCL):
-    pass
+
+    @classmethod
+    def fields(cls, values=None, originals=None):
+
+        return opengui.Fields(values, originals=originals, fields=copy.deepcopy(cls.FIELDS + cls.integrations(cls.form(values, originals)) + cls.YAML))
 
 class TemplateRUD(Template, RestRUD):
-    pass
+
+    @classmethod
+    def fields(cls, values=None, originals=None):
+
+        return opengui.Fields(values, originals=originals, fields=copy.deepcopy(cls.ID + cls.FIELDS + cls.integrations(cls.form(values, originals)) + cls.YAML))
 
 
 class Status(Model):
@@ -538,7 +618,7 @@ class StatusCL(RestCL):
     @classmethod
     def fields(cls, values=None, originals=None):
 
-        fields = opengui.Fields(values, originals=originals, fields=cls.FIELDS + cls.YAML)
+        fields = opengui.Fields(values, originals=originals, fields=cls.FIELDS + cls.integrations() + cls.YAML)
 
         fields["person_id"].options, fields["person_id"].content["labels"] = Person.choices()
         fields["status"].options = cls.STATUSES
@@ -621,7 +701,7 @@ class StatusRUD(RestRUD):
     @classmethod
     def fields(cls, values=None, originals=None):
 
-        fields = opengui.Fields(values, originals=originals, fields=cls.ID + cls.FIELDS + cls.YAML)
+        fields = opengui.Fields(values, originals=originals, fields=cls.ID + cls.FIELDS + cls.integrations() + cls.YAML)
 
         fields["person_id"].options, fields["person_id"].content["labels"] = Person.choices()
         fields["status"].options = cls.STATUSES

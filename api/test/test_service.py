@@ -352,7 +352,7 @@ class TestModel(TestRest):
         "NODE_NAME": "barry"
     })
     @unittest.mock.patch("requests.options")
-    def test_service(self, mock_options):
+    def test_derive(self, mock_options):
 
         mock_options.return_value.json.return_value = "yep"
 
@@ -374,7 +374,7 @@ class TestModel(TestRest):
         "NODE_NAME": "barry"
     })
     @unittest.mock.patch("requests.options")
-    def test_service(self, mock_options):
+    def test_integrate(self, mock_options):
 
         def options(url, params=None):
 
@@ -704,11 +704,23 @@ class TestPerson(TestRest):
 
 class TestPersonCL(TestRest):
 
-    def test_fields(self):
+    @unittest.mock.patch("glob.glob")
+    @unittest.mock.patch("service.open", create=True)
+    def test_fields(self, mock_open, mock_glob):
+
+        mock_glob.return_value = ["/opt/service/config/integration_unit.test_person.fields.yaml"]
+
+        mock_open.side_effect = [
+            unittest.mock.mock_open(read_data=yaml.safe_dump({"description": "integrate"})).return_value
+        ]
 
         self.assertEqual(service.PersonCL.fields().to_list(), [
             {
                 "name": "name"
+            },
+            {
+                "name": "unit.test",
+                "description": "integrate"
             },
             {
                 "name": "yaml",
@@ -716,6 +728,10 @@ class TestPersonCL(TestRest):
                 "optional": True
             }
         ])
+
+        mock_glob.assert_called_once_with("/opt/service/config/integration_*_person.fields.yaml")
+
+        mock_open.assert_called_once_with("/opt/service/config/integration_unit.test_person.fields.yaml", "r")
 
     def test_options(self):
 
@@ -798,7 +814,15 @@ class TestPersonCL(TestRest):
 
 class TestPersonRUD(TestRest):
 
-    def test_fields(self):
+    @unittest.mock.patch("glob.glob")
+    @unittest.mock.patch("service.open", create=True)
+    def test_fields(self, mock_open, mock_glob):
+
+        mock_glob.return_value = ["/opt/service/config/integration_unit.test_person.fields.yaml"]
+
+        mock_open.side_effect = [
+            unittest.mock.mock_open(read_data=yaml.safe_dump({"description": "integrate"})).return_value
+        ]
 
         self.assertEqual(service.PersonRUD.fields().to_list(), [
             {
@@ -809,11 +833,19 @@ class TestPersonRUD(TestRest):
                 "name": "name"
             },
             {
+                "name": "unit.test",
+                "description": "integrate"
+            },
+            {
                 "name": "yaml",
                 "style": "textarea",
                 "optional": True
             }
         ])
+
+        mock_glob.assert_called_once_with("/opt/service/config/integration_*_person.fields.yaml")
+
+        mock_open.assert_called_once_with("/opt/service/config/integration_unit.test_person.fields.yaml", "r")
 
     def test_options(self):
 
@@ -945,6 +977,7 @@ class TestTemplate(TestRest):
                     "routine"
                 ],
                 "style": "radios",
+                "trigger": True,
                 "errors": ["missing value"]
             },
             {
@@ -984,6 +1017,7 @@ class TestTemplate(TestRest):
                     "routine"
                 ],
                 "style": "radios",
+                "trigger": True,
                 "errors": ["missing value"]
             },
             {
@@ -1010,6 +1044,170 @@ class TestTemplate(TestRest):
 
         self.assertEqual(service.Template.retrieve(template.id).name, "unit")
 
+    @unittest.mock.patch("glob.glob")
+    @unittest.mock.patch("service.open", create=True)
+    def test_integrations(self, mock_open, mock_glob):
+
+        def glob(pattern):
+
+            return [f"/opt/service/config/integration_unit.test_{pattern.split('_')[-1].split('.')[0]}.fields.yaml"]
+
+        mock_glob.side_effect = glob
+
+        def contents(path, mode):
+
+            return unittest.mock.mock_open(read_data=yaml.safe_dump({"description": path.split('_')[-1].split('.')[0]})).return_value
+
+        mock_open.side_effect = contents
+
+        self.assertEqual(service.Template.integrations("template"), [{
+            "name": "unit.test",
+            "description": "template"
+        }])
+
+        mock_glob.assert_called_once_with("/opt/service/config/integration_*_template.fields.yaml")
+
+        mock_open.assert_called_once_with("/opt/service/config/integration_unit.test_template.fields.yaml", "r")
+
+        self.assertEqual(service.Template.integrations("area"), [{
+            "name": "unit.test",
+            "description": "area"
+        }])
+
+        self.assertEqual(service.Template.integrations("act"), [{
+            "name": "unit.test",
+            "description": "act"
+        }])
+
+        self.assertEqual(service.Template.integrations("todo"), [{
+            "name": "unit.test",
+            "description": "todo"
+        }])
+
+        self.assertEqual(service.Template.integrations("routine"), [{
+            "name": "unit.test",
+            "description": "routine"
+        }])
+
+        self.assertEqual(service.Template.integrations("nope"), [])
+
+    @unittest.mock.patch("glob.glob")
+    @unittest.mock.patch("service.open", create=True)
+    def test_request(self, mock_open, mock_glob):
+
+        def glob(pattern):
+
+            return [f"/opt/service/config/integration_unit.test_{pattern.split('_')[-1].split('.')[0]}.fields.yaml"]
+
+        mock_glob.side_effect = glob
+
+        def contents(path, mode):
+
+            return unittest.mock.mock_open(read_data=yaml.safe_dump({"description": path.split('_')[-1].split('.')[0]})).return_value
+
+        mock_open.side_effect = contents
+
+        self.assertEqual(service.Template.request({
+            "kind": "area",
+            "unit.test": {
+                "integrate": "yep"
+            },
+            "yaml": yaml.dump({"b": 2})
+        }), {
+            "kind": "area",
+            "data": {
+                "b": 2,
+                "unit.test": {
+                    "integrate": "yep"
+                }
+            }
+        })
+
+        mock_glob.assert_called_once_with("/opt/service/config/integration_*_area.fields.yaml")
+
+        mock_open.assert_called_once_with("/opt/service/config/integration_unit.test_area.fields.yaml", "r")
+
+        self.assertEqual(service.Template.request({
+            "unit.test": {
+                "integrate": "yep"
+            },
+            "yaml": yaml.dump({"b": 2})
+        }), {
+            "data": {
+                "b": 2,
+                "unit.test": {
+                    "integrate": "yep"
+                }
+            }
+        })
+
+        mock_glob.assert_called_with("/opt/service/config/integration_*_template.fields.yaml")
+
+        mock_open.assert_called_with("/opt/service/config/integration_unit.test_template.fields.yaml", "r")
+
+    @unittest.mock.patch("glob.glob")
+    @unittest.mock.patch("service.open", create=True)
+    def test_response(self, mock_open, mock_glob):
+
+        def glob(pattern):
+
+            return [f"/opt/service/config/integration_unit.test_{pattern.split('_')[-1].split('.')[0]}.fields.yaml"]
+
+        mock_glob.side_effect = glob
+
+        def contents(path, mode):
+
+            return unittest.mock.mock_open(read_data=yaml.safe_dump({"description": path.split('_')[-1].split('.')[0]})).return_value
+
+        mock_open.side_effect = contents
+
+        template = self.sample.template(
+            "unit",
+            kind="area",
+            data={
+                "d": 4,
+                "unit.test": {
+                    "integrate": "yep"
+                }
+            }
+        )
+
+        self.assertEqual(service.Template.response(template), {
+            "id": template.id,
+            "name": "unit",
+            "kind": "area",
+            "unit.test": {
+                "integrate": "yep"
+            },
+            "data": {
+                "d": 4
+            },
+            "yaml": yaml.dump({"d": 4}, default_flow_style=False)
+        })
+
+        mock_glob.assert_called_once_with("/opt/service/config/integration_*_area.fields.yaml")
+
+        mock_open.assert_called_once_with("/opt/service/config/integration_unit.test_area.fields.yaml", "r")
+
+        template.kind = None
+
+        self.assertEqual(service.Template.response(template), {
+            "id": template.id,
+            "name": "unit",
+            "kind": None,
+            "unit.test": {
+                "integrate": "yep"
+            },
+            "data": {
+                "d": 4
+            },
+            "yaml": yaml.dump({"d": 4}, default_flow_style=False)
+        })
+
+        mock_glob.assert_called_with("/opt/service/config/integration_*_template.fields.yaml")
+
+        mock_open.assert_called_with("/opt/service/config/integration_unit.test_template.fields.yaml", "r")
+
     @unittest.mock.patch("flask.request")
     def test_choices(self, mock_request):
 
@@ -1024,9 +1222,84 @@ class TestTemplate(TestRest):
         self.assertEqual(ids, [0, rest.id, unit.id])
         self.assertEqual(labels, {0: "None", rest.id: "rest", unit.id: "unit"})
 
+    def test_form(self):
+
+        self.assertEqual(service.Template.form({"kind": "unit"}, {"kind": "test"}), "unit")
+        self.assertEqual(service.Template.form({}, {"kind": "test"}), "test")
+        self.assertEqual(service.Template.form({}, {}), "template")
+
 class TestTemplateCL(TestRest):
 
-    def test_fields(self):
+    @unittest.mock.patch("glob.glob")
+    @unittest.mock.patch("service.open", create=True)
+    def test_fields(self, mock_open, mock_glob):
+
+        def glob(pattern):
+
+            return [f"/opt/service/config/integration_unit.test_{pattern.split('_')[-1].split('.')[0]}.fields.yaml"]
+
+        mock_glob.side_effect = glob
+
+        def contents(path, mode):
+
+            return unittest.mock.mock_open(read_data=yaml.safe_dump({"description": path.split('_')[-1].split('.')[0]})).return_value
+
+        mock_open.side_effect = contents
+
+        self.assertEqual(service.TemplateCL.fields({"kind": "area"}, {"kind": "act"}).to_list(), [
+            {
+                "name": "name"
+            },
+            {
+                "name": "kind",
+                "options": [
+                    "area",
+                    "act",
+                    "todo",
+                    "routine"
+                ],
+                "style": "radios",
+                "trigger": True,
+                "value": "area",
+                "original": "act"
+            },
+            {
+                "name": "unit.test",
+                "description": "area"
+            },
+            {
+                "name": "yaml",
+                "style": "textarea",
+                "optional": True
+            }
+        ])
+
+        self.assertEqual(service.TemplateCL.fields({}, {"kind": "act"}).to_list(), [
+            {
+                "name": "name"
+            },
+            {
+                "name": "kind",
+                "options": [
+                    "area",
+                    "act",
+                    "todo",
+                    "routine"
+                ],
+                "style": "radios",
+                "trigger": True,
+                "original": "act"
+            },
+            {
+                "name": "unit.test",
+                "description": "act"
+            },
+            {
+                "name": "yaml",
+                "style": "textarea",
+                "optional": True
+            }
+        ])
 
         self.assertEqual(service.TemplateCL.fields().to_list(), [
             {
@@ -1040,7 +1313,12 @@ class TestTemplateCL(TestRest):
                     "todo",
                     "routine"
                 ],
-                "style": "radios"
+                "style": "radios",
+                "trigger": True
+            },
+            {
+                "name": "unit.test",
+                "description": "template"
             },
             {
                 "name": "yaml",
@@ -1065,7 +1343,8 @@ class TestTemplateCL(TestRest):
                     "todo",
                     "routine"
                 ],
-                "style": "radios"
+                "style": "radios",
+                "trigger": True
             },
             {
                 "name": "yaml",
@@ -1092,6 +1371,7 @@ class TestTemplateCL(TestRest):
                     "routine"
                 ],
                 "style": "radios",
+                "trigger": True,
                 "errors": ["missing value"]
             },
             {
@@ -1123,6 +1403,7 @@ class TestTemplateCL(TestRest):
                     "routine"
                 ],
                 "style": "radios",
+                "trigger": True,
                 "value": "act"
             },
             {
@@ -1165,7 +1446,84 @@ class TestTemplateCL(TestRest):
 
 class TestTemplateRUD(TestRest):
 
-    def test_fields(self):
+    @unittest.mock.patch("glob.glob")
+    @unittest.mock.patch("service.open", create=True)
+    def test_fields(self, mock_open, mock_glob):
+
+        def glob(pattern):
+
+            return [f"/opt/service/config/integration_unit.test_{pattern.split('_')[-1].split('.')[0]}.fields.yaml"]
+
+        mock_glob.side_effect = glob
+
+        def contents(path, mode):
+
+            return unittest.mock.mock_open(read_data=yaml.safe_dump({"description": path.split('_')[-1].split('.')[0]})).return_value
+
+        mock_open.side_effect = contents
+
+        self.assertEqual(service.TemplateRUD.fields({"kind": "area"}, {"kind": "act"}).to_list(), [
+            {
+                "name": "id",
+                "readonly": True
+            },
+            {
+                "name": "name"
+            },
+            {
+                "name": "kind",
+                "options": [
+                    "area",
+                    "act",
+                    "todo",
+                    "routine"
+                ],
+                "style": "radios",
+                "trigger": True,
+                "value": "area",
+                "original": "act"
+            },
+            {
+                "name": "unit.test",
+                "description": "area"
+            },
+            {
+                "name": "yaml",
+                "style": "textarea",
+                "optional": True
+            }
+        ])
+
+        self.assertEqual(service.TemplateRUD.fields({}, {"kind": "act"}).to_list(), [
+            {
+                "name": "id",
+                "readonly": True
+            },
+            {
+                "name": "name"
+            },
+            {
+                "name": "kind",
+                "options": [
+                    "area",
+                    "act",
+                    "todo",
+                    "routine"
+                ],
+                "style": "radios",
+                "trigger": True,
+                "original": "act"
+            },
+            {
+                "name": "unit.test",
+                "description": "act"
+            },
+            {
+                "name": "yaml",
+                "style": "textarea",
+                "optional": True
+            }
+        ])
 
         self.assertEqual(service.TemplateRUD.fields().to_list(), [
             {
@@ -1183,7 +1541,12 @@ class TestTemplateRUD(TestRest):
                     "todo",
                     "routine"
                 ],
-                "style": "radios"
+                "style": "radios",
+                "trigger": True
+            },
+            {
+                "name": "unit.test",
+                "description": "template"
             },
             {
                 "name": "yaml",
@@ -1219,6 +1582,7 @@ class TestTemplateRUD(TestRest):
                     "routine"
                 ],
                 "style": "radios",
+                "trigger": True,
                 "value": "todo",
                 "original": "todo"
             },
@@ -1256,6 +1620,7 @@ class TestTemplateRUD(TestRest):
                     "routine"
                 ],
                 "style": "radios",
+                "trigger": True,
                 "original": "todo",
                 "errors": ["missing value"]
             },
@@ -1296,6 +1661,7 @@ class TestTemplateRUD(TestRest):
                     "routine"
                 ],
                 "style": "radios",
+                "trigger": True,
                 "value": "act",
                 "original": "todo"
             },
@@ -1658,8 +2024,25 @@ class TestArea(TestRest):
 
 class TestAreaCL(TestRest):
 
+    @unittest.mock.patch("glob.glob")
+    @unittest.mock.patch("service.open", create=True)
     @unittest.mock.patch("flask.request")
-    def test_fields(self, mock_request):
+    def test_fields(self, mock_request, mock_open, mock_glob):
+
+        def glob(pattern):
+
+            if pattern == "/opt/service/config/integration_*_area.fields.yaml":
+                return ["/opt/service/config/integration_unit.test_area.fields.yaml"]
+
+            return []
+
+        mock_glob.side_effect = glob
+
+        mock_open.side_effect = [
+            unittest.mock.mock_open(read_data=yaml.safe_dump({"description": "integrate"})).return_value,
+            unittest.mock.mock_open(read_data=yaml.safe_dump({"description": "integrate"})).return_value,
+            unittest.mock.mock_open(read_data=yaml.safe_dump({"description": "integrate"})).return_value
+        ]
 
         mock_request.session = self.session
 
@@ -1692,11 +2075,17 @@ class TestAreaCL(TestRest):
                 "name": "name"
             },
             {
+                "name": "unit.test",
+                "description": "integrate"
+            },
+            {
                 "name": "yaml",
                 "style": "textarea",
                 "optional": True
             }
         ])
+
+        mock_open.assert_called_once_with("/opt/service/config/integration_unit.test_area.fields.yaml", "r")
 
         self.assertEqual(service.AreaCL.fields({"template_id": template.id}).to_list(), [
             {
@@ -1724,6 +2113,10 @@ class TestAreaCL(TestRest):
             {
                 "name": "name",
                 "value": "test"
+            },
+            {
+                "name": "unit.test",
+                "description": "integrate"
             },
             {
                 "name": "yaml",
@@ -1907,8 +2300,23 @@ class TestAreaCL(TestRest):
 
 class TestAreaRUD(TestRest):
 
+    @unittest.mock.patch("glob.glob")
+    @unittest.mock.patch("service.open", create=True)
     @unittest.mock.patch("flask.request")
-    def test_fields(self, mock_request):
+    def test_fields(self, mock_request, mock_open, mock_glob):
+
+        def glob(pattern):
+
+            if pattern == "/opt/service/config/integration_*_area.fields.yaml":
+                return ["/opt/service/config/integration_unit.test_area.fields.yaml"]
+
+            return []
+
+        mock_glob.side_effect = glob
+
+        mock_open.side_effect = [
+            unittest.mock.mock_open(read_data=yaml.safe_dump({"description": "integrate"})).return_value
+        ]
 
         mock_request.session = self.session
 
@@ -1945,11 +2353,17 @@ class TestAreaRUD(TestRest):
                 "readonly": True
             },
             {
+                "name": "unit.test",
+                "description": "integrate"
+            },
+            {
                 "name": "yaml",
                 "style": "textarea",
                 "optional": True
             }
         ])
+
+        mock_open.assert_called_once_with("/opt/service/config/integration_unit.test_area.fields.yaml", "r")
 
     def test_options(self):
 
@@ -2523,8 +2937,25 @@ class TestAct(TestRest):
 
 class TestActCL(TestRest):
 
+    @unittest.mock.patch("glob.glob")
+    @unittest.mock.patch("service.open", create=True)
     @unittest.mock.patch("flask.request")
-    def test_fields(self, mock_request):
+    def test_fields(self, mock_request, mock_open, mock_glob):
+
+        def glob(pattern):
+
+            if pattern == "/opt/service/config/integration_*_act.fields.yaml":
+                return ["/opt/service/config/integration_unit.test_act.fields.yaml"]
+
+            return []
+
+        mock_glob.side_effect = glob
+
+        mock_open.side_effect = [
+            unittest.mock.mock_open(read_data=yaml.safe_dump({"description": "integrate"})).return_value,
+            unittest.mock.mock_open(read_data=yaml.safe_dump({"description": "integrate"})).return_value,
+            unittest.mock.mock_open(read_data=yaml.safe_dump({"description": "integrate"})).return_value
+        ]
 
         mock_request.session = self.session
 
@@ -2557,11 +2988,17 @@ class TestActCL(TestRest):
                 "name": "name"
             },
             {
+                "name": "unit.test",
+                "description": "integrate"
+            },
+            {
                 "name": "yaml",
                 "style": "textarea",
                 "optional": True
             }
         ])
+
+        mock_open.assert_called_once_with("/opt/service/config/integration_unit.test_act.fields.yaml", "r")
 
         self.assertEqual(service.ActCL.fields({"template_id": template.id}).to_list(), [
             {
@@ -2589,6 +3026,10 @@ class TestActCL(TestRest):
             {
                 "name": "name",
                 "value": "test"
+            },
+            {
+                "name": "unit.test",
+                "description": "integrate"
             },
             {
                 "name": "yaml",
@@ -2772,8 +3213,23 @@ class TestActCL(TestRest):
 
 class TestActRUD(TestRest):
 
+    @unittest.mock.patch("glob.glob")
+    @unittest.mock.patch("service.open", create=True)
     @unittest.mock.patch("flask.request")
-    def test_fields(self, mock_request):
+    def test_fields(self, mock_request, mock_open, mock_glob):
+
+        def glob(pattern):
+
+            if pattern == "/opt/service/config/integration_*_act.fields.yaml":
+                return ["/opt/service/config/integration_unit.test_act.fields.yaml"]
+
+            return []
+
+        mock_glob.side_effect = glob
+
+        mock_open.side_effect = [
+            unittest.mock.mock_open(read_data=yaml.safe_dump({"description": "integrate"})).return_value
+        ]
 
         mock_request.session = self.session
 
@@ -2810,11 +3266,17 @@ class TestActRUD(TestRest):
                 "readonly": True
             },
             {
+                "name": "unit.test",
+                "description": "integrate"
+            },
+            {
                 "name": "yaml",
                 "style": "textarea",
                 "optional": True
             }
         ])
+
+        mock_open.assert_called_once_with("/opt/service/config/integration_unit.test_act.fields.yaml", "r")
 
     def test_options(self):
 
@@ -3547,8 +4009,25 @@ class TestToDo(TestRest):
 
 class TestToDoCL(TestRest):
 
+    @unittest.mock.patch("glob.glob")
+    @unittest.mock.patch("service.open", create=True)
     @unittest.mock.patch("flask.request")
-    def test_fields(self, mock_request):
+    def test_fields(self, mock_request, mock_open, mock_glob):
+
+        def glob(pattern):
+
+            if pattern == "/opt/service/config/integration_*_todo.fields.yaml":
+                return ["/opt/service/config/integration_unit.test_todo.fields.yaml"]
+
+            return []
+
+        mock_glob.side_effect = glob
+
+        mock_open.side_effect = [
+            unittest.mock.mock_open(read_data=yaml.safe_dump({"description": "integrate"})).return_value,
+            unittest.mock.mock_open(read_data=yaml.safe_dump({"description": "integrate"})).return_value,
+            unittest.mock.mock_open(read_data=yaml.safe_dump({"description": "integrate"})).return_value
+        ]
 
         mock_request.session = self.session
 
@@ -3581,11 +4060,17 @@ class TestToDoCL(TestRest):
                 "name": "name"
             },
             {
+                "name": "unit.test",
+                "description": "integrate"
+            },
+            {
                 "name": "yaml",
                 "style": "textarea",
                 "optional": True
             }
         ])
+
+        mock_open.assert_called_once_with("/opt/service/config/integration_unit.test_todo.fields.yaml", "r")
 
         self.assertEqual(service.ToDoCL.fields({"template_id": template.id}).to_list(), [
             {
@@ -3613,6 +4098,10 @@ class TestToDoCL(TestRest):
             {
                 "name": "name",
                 "value": "test"
+            },
+            {
+                "name": "unit.test",
+                "description": "integrate"
             },
             {
                 "name": "yaml",
@@ -3815,8 +4304,23 @@ class TestToDoCL(TestRest):
 
 class TestToDoRUD(TestRest):
 
+    @unittest.mock.patch("glob.glob")
+    @unittest.mock.patch("service.open", create=True)
     @unittest.mock.patch("flask.request")
-    def test_fields(self, mock_request):
+    def test_fields(self, mock_request, mock_open, mock_glob):
+
+        def glob(pattern):
+
+            if pattern == "/opt/service/config/integration_*_todo.fields.yaml":
+                return ["/opt/service/config/integration_unit.test_todo.fields.yaml"]
+
+            return []
+
+        mock_glob.side_effect = glob
+
+        mock_open.side_effect = [
+            unittest.mock.mock_open(read_data=yaml.safe_dump({"description": "integrate"})).return_value
+        ]
 
         mock_request.session = self.session
 
@@ -3853,11 +4357,17 @@ class TestToDoRUD(TestRest):
                 "readonly": True
             },
             {
+                "name": "unit.test",
+                "description": "integrate"
+            },
+            {
                 "name": "yaml",
                 "style": "textarea",
                 "optional": True
             }
         ])
+
+        mock_open.assert_called_once_with("/opt/service/config/integration_unit.test_todo.fields.yaml", "r")
 
     def test_options(self):
 
@@ -4764,8 +5274,25 @@ class TestRoutine(TestRest):
 
 class TestRoutineCL(TestRest):
 
+    @unittest.mock.patch("glob.glob")
+    @unittest.mock.patch("service.open", create=True)
     @unittest.mock.patch("flask.request")
-    def test_fields(self, mock_request):
+    def test_fields(self, mock_request, mock_open, mock_glob):
+
+        def glob(pattern):
+
+            if pattern == "/opt/service/config/integration_*_routine.fields.yaml":
+                return ["/opt/service/config/integration_unit.test_routine.fields.yaml"]
+
+            return []
+
+        mock_glob.side_effect = glob
+
+        mock_open.side_effect = [
+            unittest.mock.mock_open(read_data=yaml.safe_dump({"description": "integrate"})).return_value,
+            unittest.mock.mock_open(read_data=yaml.safe_dump({"description": "integrate"})).return_value,
+            unittest.mock.mock_open(read_data=yaml.safe_dump({"description": "integrate"})).return_value
+        ]
 
         mock_request.session = self.session
 
@@ -4798,11 +5325,17 @@ class TestRoutineCL(TestRest):
                 "name": "name"
             },
             {
+                "name": "unit.test",
+                "description": "integrate"
+            },
+            {
                 "name": "yaml",
                 "style": "textarea",
                 "optional": True
             }
         ])
+
+        mock_open.assert_called_once_with("/opt/service/config/integration_unit.test_routine.fields.yaml", "r")
 
         self.assertEqual(service.RoutineCL.fields({"template_id": template.id}).to_list(), [
             {
@@ -4830,6 +5363,10 @@ class TestRoutineCL(TestRest):
             {
                 "name": "name",
                 "value": "test"
+            },
+            {
+                "name": "unit.test",
+                "description": "integrate"
             },
             {
                 "name": "yaml",
@@ -5025,8 +5562,23 @@ class TestRoutineCL(TestRest):
 
 class TestRoutineRUD(TestRest):
 
+    @unittest.mock.patch("glob.glob")
+    @unittest.mock.patch("service.open", create=True)
     @unittest.mock.patch("flask.request")
-    def test_fields(self, mock_request):
+    def test_fields(self, mock_request, mock_open, mock_glob):
+
+        def glob(pattern):
+
+            if pattern == "/opt/service/config/integration_*_routine.fields.yaml":
+                return ["/opt/service/config/integration_unit.test_routine.fields.yaml"]
+
+            return []
+
+        mock_glob.side_effect = glob
+
+        mock_open.side_effect = [
+            unittest.mock.mock_open(read_data=yaml.safe_dump({"description": "integrate"})).return_value
+        ]
 
         mock_request.session = self.session
 
@@ -5063,11 +5615,17 @@ class TestRoutineRUD(TestRest):
                 "readonly": True
             },
             {
+                "name": "unit.test",
+                "description": "integrate"
+            },
+            {
                 "name": "yaml",
                 "style": "textarea",
                 "optional": True
             }
         ])
+
+        mock_open.assert_called_once_with("/opt/service/config/integration_unit.test_routine.fields.yaml", "r")
 
     def test_options(self):
 
