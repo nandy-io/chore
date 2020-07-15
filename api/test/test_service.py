@@ -1219,8 +1219,8 @@ class TestTemplate(TestRest):
 
         (ids, labels) = service.Template.choices("todo")
 
-        self.assertEqual(ids, [0, rest.id, unit.id])
-        self.assertEqual(labels, {0: "None", rest.id: "rest", unit.id: "unit"})
+        self.assertEqual(ids, [rest.id, unit.id])
+        self.assertEqual(labels, {rest.id: "rest", unit.id: "unit"})
 
     def test_form(self):
 
@@ -1742,8 +1742,8 @@ class TestArea(TestRest):
             {
                 "name": "template_id",
                 "label": "template",
-                "options": [0, template.id],
-                "labels": {0: "None", template.id: "test"},
+                "options": [template.id],
+                "labels": {template.id: "test"},
                 "style": "select",
                 "trigger": True,
                 "optional": True
@@ -2065,8 +2065,8 @@ class TestAreaCL(TestRest):
             {
                 "name": "template_id",
                 "label": "template",
-                "options": [0, template.id],
-                "labels": {0: "None", template.id: "test"},
+                "options": [template.id],
+                "labels": {template.id: "test"},
                 "style": "select",
                 "trigger": True,
                 "optional": True
@@ -2103,8 +2103,8 @@ class TestAreaCL(TestRest):
             {
                 "name": "template_id",
                 "label": "template",
-                "options": [0, template.id],
-                "labels": {0: "None", template.id: "test"},
+                "options": [template.id],
+                "labels": {template.id: "test"},
                 "style": "select",
                 "trigger": True,
                 "value": template.id,
@@ -2149,8 +2149,8 @@ class TestAreaCL(TestRest):
             {
                 "name": "template_id",
                 "label": "template",
-                "options": [0, template.id],
-                "labels": {'0': "None", str(template.id): "test"},
+                "options": [template.id],
+                "labels": {str(template.id): "test"},
                 "style": "select",
                 "trigger": True,
                 "optional": True
@@ -2187,8 +2187,8 @@ class TestAreaCL(TestRest):
             {
                 "name": "template_id",
                 "label": "template",
-                "options": [0, template.id],
-                "labels": {'0': "None", str(template.id): "test"},
+                "options": [template.id],
+                "labels": {str(template.id): "test"},
                 "style": "select",
                 "trigger": True,
                 "optional": True
@@ -2230,8 +2230,8 @@ class TestAreaCL(TestRest):
             {
                 "name": "template_id",
                 "label": "template",
-                "options": [0, template.id],
-                "labels": {'0': "None", str(template.id): "test"},
+                "options": [template.id],
+                "labels": {str(template.id): "test"},
                 "style": "select",
                 "trigger": True,
                 "optional": True,
@@ -2627,8 +2627,8 @@ class TestAct(TestRest):
             {
                 "name": "template_id",
                 "label": "template",
-                "options": [0, template.id],
-                "labels": {0: "None", template.id: "test"},
+                "options": [template.id],
+                "labels": {template.id: "test"},
                 "style": "select",
                 "trigger": True,
                 "optional": True
@@ -2978,8 +2978,8 @@ class TestActCL(TestRest):
             {
                 "name": "template_id",
                 "label": "template",
-                "options": [0, template.id],
-                "labels": {0: "None", template.id: "test"},
+                "options": [template.id],
+                "labels": {template.id: "test"},
                 "style": "select",
                 "trigger": True,
                 "optional": True
@@ -3016,8 +3016,8 @@ class TestActCL(TestRest):
             {
                 "name": "template_id",
                 "label": "template",
-                "options": [0, template.id],
-                "labels": {0: "None", template.id: "test"},
+                "options": [template.id],
+                "labels": {template.id: "test"},
                 "style": "select",
                 "trigger": True,
                 "optional": True,
@@ -3062,8 +3062,8 @@ class TestActCL(TestRest):
             {
                 "name": "template_id",
                 "label": "template",
-                "options": [0, template.id],
-                "labels": {'0': "None", str(template.id): "test"},
+                "options": [template.id],
+                "labels": {str(template.id): "test"},
                 "style": "select",
                 "trigger": True,
                 "optional": True
@@ -3100,8 +3100,8 @@ class TestActCL(TestRest):
             {
                 "name": "template_id",
                 "label": "template",
-                "options": [0, template.id],
-                "labels": {'0': "None", str(template.id): "test"},
+                "options": [template.id],
+                "labels": {str(template.id): "test"},
                 "style": "select",
                 "trigger": True,
                 "optional": True
@@ -3143,8 +3143,8 @@ class TestActCL(TestRest):
             {
                 "name": "template_id",
                 "label": "template",
-                "options": [0, template.id],
-                "labels": {'0': "None", str(template.id): "test"},
+                "options": [template.id],
+                "labels": {str(template.id): "test"},
                 "style": "select",
                 "trigger": True,
                 "optional": True,
@@ -3539,8 +3539,8 @@ class TestToDo(TestRest):
             {
                 "name": "template_id",
                 "label": "template",
-                "options": [0, template.id],
-                "labels": {0: "None", template.id: "test"},
+                "options": [template.id],
+                "labels": {template.id: "test"},
                 "style": "select",
                 "trigger": True,
                 "optional": True
@@ -4050,8 +4050,8 @@ class TestToDoCL(TestRest):
             {
                 "name": "template_id",
                 "label": "template",
-                "options": [0, template.id],
-                "labels": {0: "None", template.id: "test"},
+                "options": [template.id],
+                "labels": {template.id: "test"},
                 "style": "select",
                 "trigger": True,
                 "optional": True
@@ -4088,8 +4088,8 @@ class TestToDoCL(TestRest):
             {
                 "name": "template_id",
                 "label": "template",
-                "options": [0, template.id],
-                "labels": {0: "None", template.id: "test"},
+                "options": [template.id],
+                "labels": {template.id: "test"},
                 "style": "select",
                 "trigger": True,
                 "optional": True,
@@ -4134,8 +4134,8 @@ class TestToDoCL(TestRest):
             {
                 "name": "template_id",
                 "label": "template",
-                "options": [0, template.id],
-                "labels": {'0': "None", str(template.id): "test"},
+                "options": [template.id],
+                "labels": {str(template.id): "test"},
                 "style": "select",
                 "trigger": True,
                 "optional": True
@@ -4172,8 +4172,8 @@ class TestToDoCL(TestRest):
             {
                 "name": "template_id",
                 "label": "template",
-                "options": [0, template.id],
-                "labels": {'0': "None", str(template.id): "test"},
+                "options": [template.id],
+                "labels": {str(template.id): "test"},
                 "style": "select",
                 "trigger": True,
                 "optional": True
@@ -4215,8 +4215,8 @@ class TestToDoCL(TestRest):
             {
                 "name": "template_id",
                 "label": "template",
-                "options": [0, template.id],
-                "labels": {'0': "None", str(template.id): "test"},
+                "options": [template.id],
+                "labels": {str(template.id): "test"},
                 "style": "select",
                 "trigger": True,
                 "optional": True,
@@ -4689,8 +4689,8 @@ class TestRoutine(TestRest):
             {
                 "name": "template_id",
                 "label": "template",
-                "options": [0, template.id],
-                "labels": {0: "None", template.id: "test"},
+                "options": [template.id],
+                "labels": {template.id: "test"},
                 "style": "select",
                 "trigger": True,
                 "optional": True
@@ -5315,8 +5315,8 @@ class TestRoutineCL(TestRest):
             {
                 "name": "template_id",
                 "label": "template",
-                "options": [0, template.id],
-                "labels": {0: "None", template.id: "test"},
+                "options": [template.id],
+                "labels": {template.id: "test"},
                 "style": "select",
                 "trigger": True,
                 "optional": True
@@ -5353,8 +5353,8 @@ class TestRoutineCL(TestRest):
             {
                 "name": "template_id",
                 "label": "template",
-                "options": [0, template.id],
-                "labels": {0: "None", template.id: "test"},
+                "options": [template.id],
+                "labels": {template.id: "test"},
                 "style": "select",
                 "trigger": True,
                 "optional": True,
@@ -5399,8 +5399,8 @@ class TestRoutineCL(TestRest):
             {
                 "name": "template_id",
                 "label": "template",
-                "options": [0, template.id],
-                "labels": {'0': "None", str(template.id): "test"},
+                "options": [template.id],
+                "labels": {str(template.id): "test"},
                 "style": "select",
                 "trigger": True,
                 "optional": True
@@ -5437,8 +5437,8 @@ class TestRoutineCL(TestRest):
             {
                 "name": "template_id",
                 "label": "template",
-                "options": [0, template.id],
-                "labels": {'0': "None", str(template.id): "test"},
+                "options": [template.id],
+                "labels": {str(template.id): "test"},
                 "style": "select",
                 "trigger": True,
                 "optional": True
@@ -5480,8 +5480,8 @@ class TestRoutineCL(TestRest):
             {
                 "name": "template_id",
                 "label": "template",
-                "options": [0, template.id],
-                "labels": {'0': "None", str(template.id): "test"},
+                "options": [template.id],
+                "labels": {str(template.id): "test"},
                 "style": "select",
                 "trigger": True,
                 "optional": True,

@@ -455,8 +455,8 @@ class Template(Model):
     @classmethod
     def choices(cls, kind):
 
-        ids = [0]
-        labels = {0: "None"}
+        ids = []
+        labels = {}
 
         for model in flask.request.session.query(
             cls.MODEL
@@ -520,7 +520,7 @@ class Status(Model):
 
             template = None
 
-            if "template_id" in kwargs and kwargs["template_id"]:
+            if "template_id" in kwargs:
                 template = flask.request.session.query(
                     mysql.Template
                 ).get(

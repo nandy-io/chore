@@ -22,6 +22,9 @@
         {{?}}
     {{??field.style == "select" && !readonly}}
             <select id="{{!full_name}}" {{?field.trigger}}OnChange="DRApp.current.controller.fields_change();"{{?}}>
+        {{?field.optional}}
+                <option value=''></option>
+        {{?}}
         {{~field.options :option}}
                 <option value='{{!option}}' {{?value == option}}selected{{?}}>
                     {{= field.labels ? field.labels[option] : option}}

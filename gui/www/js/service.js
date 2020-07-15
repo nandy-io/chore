@@ -58,6 +58,17 @@ DRApp.controller("Base",null,{
         this.it = this.rest("OPTIONS",this.url(), this.fields_request());
         this.application.render(this.it);
     },
+    field_value(field, value, values) {
+        for (var option = 0; option < field.options.length; option++) {
+            if (value == field.options[option]) {
+                if (Array.isArray(values)) {
+                    values.push(field.options[option]);
+                } else {
+                    values[field.name] = field.options[option];
+                }
+            }
+        }
+    },
     fields_values: function(prefix, fields) {
         prefix = prefix || [];
         fields = fields || this.it.fields;
@@ -71,14 +82,14 @@ DRApp.controller("Base",null,{
             var full_name = prefix.concat(field.name).join('-').replace(/\./g, '-');
             if (field.readonly) {
                 continue
-            } else if (field.options && field.style != "select") {
+            } else if (field.options) {
                 if (field.multi) {
                     values[field.name] = [];
                     $("input[name='" + full_name + "']:checked").each(function () {
-                        values[field.name].push($(this).val());
+                        this.field_value(field, $(this).val(), values[field.name]);
                     });
                 } else {
-                    values[field.name] = $("input[name='" + full_name+ "']:checked").val()
+                    this.field_value(field, $("input[name='" + full_name+ "']:checked").val(), values);
                 }
             } else {
                 values[field.name] = $('#' + full_name).val();
