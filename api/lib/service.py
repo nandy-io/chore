@@ -1,5 +1,6 @@
 import os
 import time
+import glob
 import copy
 import json
 import yaml
@@ -13,7 +14,6 @@ import flask_restful
 import sqlalchemy.exc
 
 import opengui
-import pykube
 
 import mysql
 
@@ -25,11 +25,6 @@ def app():
 
     app.redis = redis.StrictRedis(host=os.environ['REDIS_HOST'], port=int(os.environ['REDIS_PORT']))
     app.channel = os.environ['REDIS_CHANNEL']
-
-    if os.path.exists("/var/run/secrets/kubernetes.io/serviceaccount/token"):
-        app.kube = pykube.HTTPClient(pykube.KubeConfig.from_service_account())
-    else:
-        app.kube = pykube.HTTPClient(pykube.KubeConfig.from_url("http://host.docker.internal:7580"))
 
     api = flask_restful.Api(app)
 
@@ -104,37 +99,6 @@ def validate(fields):
 
     return valid
 
-def model_in(converted):
-
-    fields = {}
-
-    for field in converted.keys():
-
-        if field == "yaml":
-            fields["data"] = yaml.safe_load(converted[field])
-        else:
-            fields[field] = converted[field]
-
-    return fields
-
-def model_out(model):
-
-    converted = {}
-
-    for field in model.__table__.columns._data.keys():
-
-        converted[field] = getattr(model, field)
-
-        if field == "data":
-            converted["yaml"] = yaml.safe_dump(dict(converted[field]), default_flow_style=False)
-
-    return converted
-
-def models_out(models):
-
-    return [model_out(model) for model in models]
-
-
 def notify(message):
 
     flask.current_app.redis.publish(flask.current_app.channel, json.dumps(message))
@@ -146,16 +110,24 @@ class Health(flask_restful.Resource):
 
 class Model:
 
+    YAML = [
+        {
+            "name": "yaml",
+            "style": "textarea",
+            "optional": True
+        }
+    ]
+
     @staticmethod
     def validate(fields):
 
         return validate(fields)
 
     @classmethod
-    def retrieve(self, id):
+    def retrieve(cls, id):
 
         model = flask.request.session.query(
-            self.MODEL
+            cls.MODEL
         ).get(
             id
         )
@@ -163,12 +135,103 @@ class Model:
         flask.request.session.commit()
         return model
 
+    @staticmethod
+    def derive(integrate):
+
+        if "url" in integrate:
+            response = requests.options(integrate["url"])
+        elif "node" in integrate:
+            response = requests.options(f"http://{os.environ['NODE_NAME']}:8083/node", params=integrate["node"])
+
+        response.raise_for_status()
+
+        return response.json()
+
+    @classmethod
+    def integrate(cls, integration):
+
+        if "integrate" in integration:
+            try:
+                integration.update(cls.derive(integration["integrate"]))
+            except Exception as exception:
+                integration.setdefault("errors", [])
+                integration["errors"].append(f"failed to integrate: {exception}")
+
+        for field in integration.get("fields", []):
+            cls.integrate(field)
+
+        return integration
+
+    @classmethod
+    def integrations(cls):
+
+        integrations = []
+
+        for integration_path in sorted(glob.glob(f"/opt/service/config/integration_*_{cls.SINGULAR}.fields.yaml")):
+            with open(integration_path, "r") as integration_file:
+                integrations.append(cls.integrate({**{"name": integration_path.split("_")[1], **yaml.safe_load(integration_file)}}))
+
+        return integrations
+
+    @classmethod
+    def request(cls, converted):
+
+        values = {}
+
+        integrations = opengui.Fields({}, {}, cls.integrations())
+
+        for field in converted.keys():
+
+            if field in integrations.names:
+                values.setdefault("data", {})
+                values["data"][field] = converted[field]
+            elif field != "yaml":
+                values[field] = converted[field]
+
+        if "yaml" in converted:
+            values.setdefault("data", {})
+            values["data"].update(yaml.safe_load(converted["yaml"]))
+
+        if "data" in converted:
+            values.setdefault("data", {})
+            values["data"].update(converted["data"])
+
+        return values
+
+    @classmethod
+    def response(cls, model):
+
+        converted = {
+            "data": {}
+        }
+
+        integrations = opengui.Fields({}, {}, cls.integrations())
+
+        for field in model.__table__.columns._data.keys():
+            if field != "data":
+                converted[field] = getattr(model, field)
+
+        for field in model.data:
+            if field in integrations.names:
+                converted[field] = model.data[field]
+            else:
+                converted["data"][field] = model.data[field]
+
+        converted["yaml"] = yaml.safe_dump(dict(converted["data"]), default_flow_style=False)
+
+        return converted
+
+    @classmethod
+    def responses(cls, models):
+
+        return [cls.response(model) for model in models]
+
 class RestCL(flask_restful.Resource):
 
     @classmethod
     def fields(cls, values=None, originals=None):
 
-        return opengui.Fields(values, originals=originals, fields=copy.deepcopy(cls.FIELDS))
+        return opengui.Fields(values, originals=originals, fields=copy.deepcopy(cls.FIELDS + cls.integrations() + cls.YAML))
 
     @require_session
     def options(self):
@@ -185,11 +248,11 @@ class RestCL(flask_restful.Resource):
     @require_session
     def post(self):
 
-        model = self.MODEL(**model_in(flask.request.json[self.SINGULAR]))
+        model = self.MODEL(**self.request(flask.request.json[self.SINGULAR]))
         flask.request.session.add(model)
         flask.request.session.commit()
 
-        return {self.SINGULAR: model_out(model)}, 201
+        return {self.SINGULAR: self.response(model)}, 201
 
     @require_session
     def get(self):
@@ -203,7 +266,7 @@ class RestCL(flask_restful.Resource):
         ).all()
         flask.request.session.commit()
 
-        return {self.PLURAL: models_out(models)}
+        return {self.PLURAL: self.responses(models)}
 
 class RestRUD(flask_restful.Resource):
 
@@ -217,12 +280,12 @@ class RestRUD(flask_restful.Resource):
     @classmethod
     def fields(cls, values=None, originals=None):
 
-        return opengui.Fields(values, originals=originals, fields=copy.deepcopy(cls.ID + cls.FIELDS))
+        return opengui.Fields(values, originals=originals, fields=copy.deepcopy(cls.ID + cls.FIELDS + cls.integrations() + cls.YAML))
 
     @require_session
     def options(self, id):
 
-        originals = model_out(self.retrieve(id))
+        originals = self.response(self.retrieve(id))
 
         values = flask.request.json[self.SINGULAR] if flask.request.json and self.SINGULAR in flask.request.json else None
 
@@ -236,7 +299,7 @@ class RestRUD(flask_restful.Resource):
     @require_session
     def get(self, id):
 
-        return {self.SINGULAR: model_out(self.retrieve(id))}
+        return {self.SINGULAR: self.response(self.retrieve(id))}
 
     @require_session
     def patch(self, id):
@@ -246,7 +309,7 @@ class RestRUD(flask_restful.Resource):
         ).filter_by(
             id=id
         ).update(
-            model_in(flask.request.json[self.SINGULAR])
+            self.request(flask.request.json[self.SINGULAR])
         )
         flask.request.session.commit()
 
@@ -275,11 +338,6 @@ class Person(Model):
     FIELDS = [
         {
             "name": "name"
-        },
-        {
-            "name": "yaml",
-            "style": "textarea",
-            "optional": True
         }
     ]
 
@@ -329,19 +387,76 @@ class Template(Model):
                 "todo",
                 "routine"
             ],
-            "style": "radios"
-        },
-        {
-            "name": "yaml",
-            "style": "textarea"
+            "style": "radios",
+            "trigger": True
         }
     ]
 
     @classmethod
+    def integrations(cls, form):
+
+        integrations = []
+
+        if form in ["template", "area", "act", "todo", "routine"]:
+            for integration_path in sorted(glob.glob(f"/opt/service/config/integration_*_{form}.fields.yaml")):
+                with open(integration_path, "r") as integration_file:
+                    integrations.append(cls.integrate({**{"name": integration_path.split("_")[1], **yaml.safe_load(integration_file)}}))
+
+        return integrations
+
+    @classmethod
+    def request(cls, converted):
+
+        values = {}
+
+        integrations = opengui.Fields({}, {}, cls.integrations(converted.get("kind", "template")))
+
+        for field in converted.keys():
+
+            if field in integrations.names:
+                values.setdefault("data", {})
+                values["data"][field] = converted[field]
+            elif field != "yaml":
+                values[field] = converted[field]
+
+        if "yaml" in converted:
+            values.setdefault("data", {})
+            values["data"].update(yaml.safe_load(converted["yaml"]))
+
+        if "data" in converted:
+            values.setdefault("data", {})
+            values["data"].update(converted["data"])
+
+        return values
+
+    @classmethod
+    def response(cls, model):
+
+        converted = {
+            "data": {}
+        }
+
+        integrations = opengui.Fields({}, {}, cls.integrations(model.kind or "template"))
+
+        for field in model.__table__.columns._data.keys():
+            if field != "data":
+                converted[field] = getattr(model, field)
+
+        for field in model.data:
+            if field in integrations.names:
+                converted[field] = model.data[field]
+            else:
+                converted["data"][field] = model.data[field]
+
+        converted["yaml"] = yaml.safe_dump(dict(converted["data"]), default_flow_style=False)
+
+        return converted
+
+    @classmethod
     def choices(cls, kind):
 
-        ids = [0]
-        labels = {0: "None"}
+        ids = []
+        labels = {}
 
         for model in flask.request.session.query(
             cls.MODEL
@@ -357,11 +472,30 @@ class Template(Model):
 
         return (ids, labels)
 
+    @staticmethod
+    def form(values, originals):
+
+        if values and "kind" in values:
+            return values["kind"]
+
+        if originals and "kind" in originals:
+            return originals["kind"]
+
+        return "template"
+
 class TemplateCL(Template, RestCL):
-    pass
+
+    @classmethod
+    def fields(cls, values=None, originals=None):
+
+        return opengui.Fields(values, originals=originals, fields=copy.deepcopy(cls.FIELDS + cls.integrations(cls.form(values, originals)) + cls.YAML))
 
 class TemplateRUD(Template, RestRUD):
-    pass
+
+    @classmethod
+    def fields(cls, values=None, originals=None):
+
+        return opengui.Fields(values, originals=originals, fields=copy.deepcopy(cls.ID + cls.FIELDS + cls.integrations(cls.form(values, originals)) + cls.YAML))
 
 
 class Status(Model):
@@ -386,7 +520,7 @@ class Status(Model):
 
             template = None
 
-            if "template_id" in kwargs and kwargs["template_id"]:
+            if "template_id" in kwargs:
                 template = flask.request.session.query(
                     mysql.Template
                 ).get(
@@ -432,7 +566,7 @@ class Status(Model):
     @classmethod
     def notify(cls, action, model):
         """
-        Notifies somethign happened
+        Notifies something happened
         """
 
         model.data["notified"] = time.time()
@@ -441,8 +575,8 @@ class Status(Model):
         notify({
             "kind": cls.SINGULAR,
             "action": action,
-            cls.SINGULAR: model_out(model),
-            "person": model_out(model.person)
+            cls.SINGULAR: cls.response(model),
+            "person": Person.response(model.person)
         })
 
     @classmethod
@@ -459,47 +593,40 @@ class Status(Model):
 
 class StatusCL(RestCL):
 
+    FIELDS = [
+        {
+            "name": "person_id",
+            "label": "person",
+            "style": "radios"
+        },
+        {
+            "name": "status",
+            "style": "radios"
+        },
+        {
+            "name": "template_id",
+            "label": "template",
+            "style": "select",
+            "optional": True,
+            "trigger": True
+        },
+        {
+            "name": "name"
+        }
+    ]
+
     @classmethod
     def fields(cls, values=None, originals=None):
 
-        (person_ids, person_labels) = Person.choices()
-        (template_ids, template_labels) = Template.choices(cls.SINGULAR)
+        fields = opengui.Fields(values, originals=originals, fields=cls.FIELDS + cls.integrations() + cls.YAML)
 
-        fields = opengui.Fields(values, originals=originals, fields=[
-            {
-                "name": "person_id",
-                "label": "person",
-                "options": person_ids,
-                "labels": person_labels,
-                "style": "radios"
-            },
-            {
-                "name": "status",
-                "options": cls.STATUSES,
-                "style": "radios"
-            },
-            {
-                "name": "template_id",
-                "label": "template",
-                "options": template_ids,
-                "labels": template_labels,
-                "style": "select",
-                "optional": True,
-                "trigger": True
-            },
-            {
-                "name": "name"
-            },
-            {
-                "name": "yaml",
-                "style": "textarea",
-                "optional": True
-            }
-        ])
+        fields["person_id"].options, fields["person_id"].content["labels"] = Person.choices()
+        fields["status"].options = cls.STATUSES
+        fields["template_id"].options, fields["template_id"].content["labels"] = Template.choices(cls.SINGULAR)
 
         if fields["template_id"].value:
 
-            template = model_out(TemplateRUD.retrieve(fields["template_id"].value))
+            template = Template.response(TemplateRUD.retrieve(fields["template_id"].value))
 
             fields["name"].value = template["name"]
             fields["yaml"].value = template["yaml"]
@@ -509,9 +636,9 @@ class StatusCL(RestCL):
     @require_session
     def post(self):
 
-        model = self.create(**model_in(flask.request.json[self.SINGULAR]))
+        model = self.create(**self.request(flask.request.json[self.SINGULAR]))
 
-        return {self.SINGULAR: model_out(model)}, 201
+        return {self.SINGULAR: self.response(model)}, 201
 
     @require_session
     def get(self):
@@ -542,47 +669,42 @@ class StatusCL(RestCL):
 
         flask.request.session.commit()
 
-        return {self.PLURAL: models_out(models)}
+        return {self.PLURAL: self.responses(models)}
 
 class StatusRUD(RestRUD):
+
+    FIELDS = [
+        {
+            "name": "person_id",
+            "label": "person",
+            "style": "radios"
+        },
+        {
+            "name": "status",
+            "style": "radios"
+        },
+        {
+            "name": "name"
+        },
+        {
+            "name": "created",
+            "style": "datetime",
+            "readonly": True
+        },
+        {
+            "name": "updated",
+            "style": "datetime",
+            "readonly": True
+        }
+    ]
 
     @classmethod
     def fields(cls, values=None, originals=None):
 
-        (person_ids, person_labels) = Person.choices()
+        fields = opengui.Fields(values, originals=originals, fields=cls.ID + cls.FIELDS + cls.integrations() + cls.YAML)
 
-        fields = opengui.Fields(values, originals=originals, fields=cls.ID + [
-            {
-                "name": "person_id",
-                "label": "person",
-                "options": person_ids,
-                "labels": person_labels,
-                "style": "radios"
-            },
-            {
-                "name": "status",
-                "options": cls.STATUSES,
-                "style": "radios"
-            },
-            {
-                "name": "name"
-            },
-            {
-                "name": "created",
-                "style": "datetime",
-                "readonly": True
-            },
-            {
-                "name": "updated",
-                "style": "datetime",
-                "readonly": True
-            },
-            {
-                "name": "yaml",
-                "style": "textarea",
-                "optional": True
-            }
-        ])
+        fields["person_id"].options, fields["person_id"].content["labels"] = Person.choices()
+        fields["status"].options = cls.STATUSES
 
         return fields
 
@@ -866,8 +988,8 @@ class ToDo(State):
     MODEL = mysql.ToDo
     ORDER = [mysql.ToDo.created.desc()]
 
-    @staticmethod
-    def todos(data):
+    @classmethod
+    def todos(cls, data):
         """
         Reminds all ToDos
         """
@@ -905,9 +1027,9 @@ class ToDo(State):
             notify({
                 "kind": "todos",
                 "action": "remind",
-                "person": model_out(person),
+                "person": Person.response(person),
                 "speech": data.get("speech", {}),
-                "todos": models_out(todos)
+                "todos": cls.responses(todos)
             })
 
             updated = True
@@ -1104,8 +1226,8 @@ class Task:
             "kind": "task",
             "action": action,
             "task": task,
-            "routine": model_out(routine),
-            "person": model_out(routine.person)
+            "routine": Routine.response(routine),
+            "person": Person.response(routine.person)
         })
 
     @classmethod

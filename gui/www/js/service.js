@@ -54,47 +54,68 @@ DRApp.controller("Base",null,{
         this.it = this.rest("GET",this.url());
         this.application.render(this.it);
     },
-    fields_input: function() {
-        var input = {};
-        input[this.singular] = {}
-        for (var index = 0; index < this.it.fields.length; index++) {
-            var field = this.it.fields[index];
-            var value;
-            if (field.readonly) {
-                continue
-            } else if (field.options && field.style != "select") {
-                value = $('input[name=' + field.name + ']:checked').val();
-            } else {
-                value = $('#' + field.name).val();
-            }
-            if (value && value.length) {
-                if (field.options) {
-                    for (var option = 0; option < field.options.length; option++) {
-                        if (value == field.options[option]) {
-                            value = field.options[option];
-                        }
-                    }
-                } 
-                input[this.singular][field.name] = value;
+    fields_change: function() {
+        this.it = this.rest("OPTIONS",this.url(), this.fields_request());
+        this.application.render(this.it);
+    },
+    field_value(field, value, values) {
+        for (var option = 0; option < field.options.length; option++) {
+            if (value == field.options[option]) {
+                if (Array.isArray(values)) {
+                    values.push(field.options[option]);
+                } else {
+                    values[field.name] = field.options[option];
+                }
             }
         }
-        return input;
+    },
+    fields_values: function(prefix, fields) {
+        prefix = prefix || [];
+        fields = fields || this.it.fields;
+        var values = {};
+        for (var index = 0; index < fields.length; index++) {
+            var field = fields[index];
+            if (field.fields) {
+                values[field.name] = this.fields_values(prefix.concat(field.name), field.fields);
+                continue;
+            }
+            var full_name = prefix.concat(field.name).join('-').replace(/\./g, '-');
+            if (field.readonly) {
+                continue
+            } else if (field.options) {
+                if (field.multi) {
+                    values[field.name] = [];
+                    $("input[name='" + full_name + "']:checked").each(function () {
+                        this.field_value(field, $(this).val(), values[field.name]);
+                    });
+                } else {
+                    this.field_value(field, $("input[name='" + full_name+ "']:checked").val(), values);
+                }
+            } else {
+                values[field.name] = $('#' + full_name).val();
+            }
+            if (field.name == "yaml" && values[field.name] == "") {
+                values[field.name] = "{}";
+            }
+        }
+        return values;
+    },
+    fields_request: function() {
+        var request = {};
+        request[this.singular] = this.fields_values();
+        return request;
     },
     create: function() {
         this.it = this.rest("OPTIONS",this.url());
         this.application.render(this.it);
     },
-    create_change: function() {
-        this.it = this.rest("OPTIONS",this.url(), this.fields_input());
-        this.application.render(this.it);
-    },
     create_save: function() {
-        var input = this.fields_input();
-        this.it = this.rest("OPTIONS",this.url(), input);
+        var request = this.fields_request();
+        this.it = this.rest("OPTIONS",this.url(), request);
         if (this.it.hasOwnProperty('errors')) {
             this.application.render(this.it);
         } else {
-            this.route("retrieve", this.rest("POST",this.url(), input)[this.singular].id);
+            this.route("retrieve", this.rest("POST",this.url(), request)[this.singular].id);
         }
     },
     retrieve: function() {
@@ -105,17 +126,13 @@ DRApp.controller("Base",null,{
         this.it = this.rest("OPTIONS",this.id_url());
         this.application.render(this.it);
     },
-    update_change: function() {
-        this.it = this.rest("OPTIONS",this.id_url(), this.fields_input());
-        this.application.render(this.it);
-    },
     update_save: function() {
-        var input = this.fields_input();
-        this.it = this.rest("OPTIONS",this.id_url(), input);
+        var request = this.fields_request();
+        this.it = this.rest("OPTIONS",this.id_url(), request);
         if (this.it.hasOwnProperty('errors')) {
             this.application.render(this.it);
         } else {
-            this.rest("PATCH",this.id_url(), input);
+            this.rest("PATCH",this.id_url(), request);
             this.route("retrieve", this.application.current.path.id);
         }
     },
@@ -130,10 +147,11 @@ DRApp.controller("Base",null,{
 // Service
 
 DRApp.partial("Header",DRApp.load("header"));
-DRApp.partial("Fields",DRApp.load("fields"));
+DRApp.partial("Form",DRApp.load("form"));
 DRApp.partial("Footer",DRApp.load("footer"));
 
 DRApp.template("Home",DRApp.load("home"),null,DRApp.partials);
+DRApp.template("Fields",DRApp.load("fields"),null,DRApp.partials);
 DRApp.template("Create",DRApp.load("create"),null,DRApp.partials);
 DRApp.template("Retrieve",DRApp.load("retrieve"),null,DRApp.partials);
 DRApp.template("Update",DRApp.load("update"),null,DRApp.partials);

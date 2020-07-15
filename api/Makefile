@@ -1,6 +1,6 @@
 ACCOUNT=nandyio
 IMAGE=chore-api
-VERSION=0.1
+VERSION=0.2
 NAME=$(IMAGE)-$(ACCOUNT)
 NETWORK=klot.io
 VOLUMES=-v ${PWD}/secret/:/opt/service/secret/ \
@@ -37,10 +37,10 @@ db:
 	docker run -it --network=$(NETWORK) $(VOLUMES) $(ENVIRONMENT) $(ACCOUNT)/$(IMAGE):$(VERSION) sh -c "bin/db.py"
 
 run: network
-	docker run --rm --name=$(NAME) --network=$(NETWORK) $(VOLUMES) $(ENVIRONMENT) -p 127.0.0.1:$(PORT):80 --expose=80 $(ACCOUNT)/$(IMAGE):$(VERSION)
+	docker run --rm --name=$(NAME) --network=$(NETWORK) $(VOLUMES) -v ${PWD}/config/:/opt/service/config/ $(ENVIRONMENT) -p 127.0.0.1:$(PORT):80 --expose=80 $(ACCOUNT)/$(IMAGE):$(VERSION)
 
 start: network
-	docker run -d --name=$(NAME) --network=$(NETWORK) $(VOLUMES) $(ENVIRONMENT) -p 127.0.0.1:$(PORT):80 --expose=80 $(ACCOUNT)/$(IMAGE):$(VERSION)
+	docker run -d --name=$(NAME) --network=$(NETWORK) $(VOLUMES) -v ${PWD}/config/:/opt/service/config/ $(ENVIRONMENT) -p 127.0.0.1:$(PORT):80 --expose=80 $(ACCOUNT)/$(IMAGE):$(VERSION)
 
 stop:
 	docker rm -f $(NAME)
