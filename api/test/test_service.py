@@ -365,7 +365,7 @@ class TestModel(TestRest):
 
         self.assertEqual(MockModel.derive({"node": "sure"}), "yep")
         mock_options.assert_has_calls([
-            unittest.mock.call("http://barry.local/node", params="sure"),
+            unittest.mock.call("http://barry:8083/node", params="sure"),
             unittest.mock.call().raise_for_status(),
             unittest.mock.call().json()
         ])
@@ -397,7 +397,7 @@ class TestModel(TestRest):
                     ]
                 }
 
-            elif url == "http://barry.local/node" and params == "yep":
+            elif url == "http://barry:8083/node" and params == "yep":
 
                 response.json.return_value = {
                     "name": "master"
@@ -474,7 +474,7 @@ class TestModel(TestRest):
                     ]
                 }
 
-            elif url == "http://barry.local/node" and params == "yep":
+            elif url == "http://barry:8083/node" and params == "yep":
 
                 response.json.return_value = {
                     "name": "master"

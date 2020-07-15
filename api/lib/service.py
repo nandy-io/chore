@@ -141,7 +141,7 @@ class Model:
         if "url" in integrate:
             response = requests.options(integrate["url"])
         elif "node" in integrate:
-            response = requests.options(f"http://{os.environ['NODE_NAME']}.local/node", params=integrate["node"])
+            response = requests.options(f"http://{os.environ['NODE_NAME']}:8083/node", params=integrate["node"])
 
         response.raise_for_status()
 
