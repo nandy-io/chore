@@ -14,7 +14,7 @@ spec:
         command: ["/opt/service/bin/db.py"]
         env:
         - name: MYSQL_HOST
-          value: db.mysql-klot-io
+          value: db.mysql
         - name: MYSQL_PORT
           value: "3306"
       restartPolicy: Never
