@@ -4,7 +4,9 @@ metadata:
   name: chore.nandy.io
 spec:
   namespace: chore-nandy-io
-  description: Chore - Nandy I/O
+  group: Nandy I/O
+  member: Chore
+  description: Tracks chores for people to do
   manifests:
   - path: api/kubernetes/mysql.yaml
   - path: api/kubernetes/api.yaml
