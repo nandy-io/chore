@@ -6,7 +6,6 @@ spec:
   namespace: chore-nandy-io
   description: Chore - Nandy I/O
   manifests:
-  - path: kubernetes/namespace.yaml
   - path: api/kubernetes/mysql.yaml
   - path: api/kubernetes/api.yaml
   - path: daemon/kubernetes/daemon.yaml

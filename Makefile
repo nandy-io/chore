@@ -1,14 +1,12 @@
 VERSION?=0.3
-.PHONY: install update remove reset tag untag
+NAMESPACE=chore-nandy-io
+.PHONY: install remove reset tag untag
 
 install:
-	kubectl create -f kubernetes/namespace.yaml
-
-update:
-	kubectl replace -f kubernetes/namespace.yaml
+	-kubectl create ns $(NAMESPACE)
 
 remove:
-	-kubectl delete -f kubernetes/namespace.yaml
+	-kubectl delete ns $(NAMESPACE)
 
 reset: remove instal
 

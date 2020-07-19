@@ -21,11 +21,11 @@ spec:
         imagePullPolicy: Always
         env:
         - name: MYSQL_HOST
-          value: db.mysql-klot-io
+          value: db.mysql
         - name: MYSQL_PORT
           value: "3306"
         - name: REDIS_HOST
-          value: db.redis-klot-io
+          value: db.redis
         - name: REDIS_PORT
           value: "6379"
         - name: REDIS_CHANNEL
