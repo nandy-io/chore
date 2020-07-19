@@ -10,6 +10,8 @@ $.ajaxPrefilter(function(options, originalOptions, jqXHR) {
 
 DRApp.me = $.cookie('chore-nandy-io-me');
 
+DRApp.group = $.ajax({url: "/api/group", async: false}).responseJSON.group;
+
 DRApp.capitalize = function(value) {
   return value.charAt(0).toUpperCase() + value.slice(1);
 }

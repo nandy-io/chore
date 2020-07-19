@@ -29,6 +29,7 @@ def app():
     api = flask_restful.Api(app)
 
     api.add_resource(Health, '/health')
+    api.add_resource(Group, '/group')
     api.add_resource(PersonCL, '/person')
     api.add_resource(PersonRUD, '/person/<int:id>')
     api.add_resource(TemplateCL, '/template')
@@ -107,6 +108,13 @@ class Health(flask_restful.Resource):
     def get(self):
         return {"message": "OK"}
 
+class Group(flask_restful.Resource):
+    def get(self):
+        response = requests.get(f"http://{os.environ['NODE_NAME']}:8083/app/chore.nandy.io/member")
+
+        response.raise_for_status()
+
+        return {"group": response.json()}
 
 class Model:
 
