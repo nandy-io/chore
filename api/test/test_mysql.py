@@ -1,5 +1,6 @@
 import unittest
 import unittest.mock
+import nandyio.unittest.people
 
 import os
 import time
@@ -15,19 +16,6 @@ class Sample:
 
         self.session = session
 
-    def person(self, name, data=None):
-
-        people = self.session.query(mysql.Person).filter_by(name=name).all()
-
-        if people:
-            return people[0]
-
-        person = mysql.Person(name=name, data=data)
-        self.session.add(person)
-        self.session.commit()
-
-        return person
-
     def template(self, name, kind, data=None):
 
         template = mysql.Template(name=name, kind=kind, data=data)
@@ -39,7 +27,7 @@ class Sample:
     def area(self, person, name, status=None, created=7, updated=8, data=None):
 
         area = mysql.Area(
-            person_id=self.person(person).id,
+            person_id=nandyio.unittest.people.MockPerson.model(name=person)["id"],
             name=name,
             status=status,
             created=created,
@@ -54,7 +42,7 @@ class Sample:
     def act(self, person, name="Unit", status=None, created=7, updated=8, data=None):
 
         act = mysql.Act(
-            person_id=self.person(person).id,
+            person_id=nandyio.unittest.people.MockPerson.model(name=person)["id"],
             name=name,
             status=status,
             created=created,
@@ -78,7 +66,7 @@ class Sample:
         base.update(data)
 
         todo = mysql.ToDo(
-            person_id=self.person(person).id,
+            person_id=nandyio.unittest.people.MockPerson.model(name=person)["id"],
             name=name,
             status=status,
             created=created,
@@ -106,7 +94,7 @@ class Sample:
             base["tasks"] = tasks
 
         routine = mysql.Routine(
-            person_id=self.person(person).id,
+            person_id=nandyio.unittest.people.MockPerson.model(name=person)["id"],
             name=name,
             status=status,
             created=created,
@@ -128,36 +116,14 @@ class TestMySQL(unittest.TestCase):
 
         self.mysql = mysql.MySQL()
         self.session = self.mysql.session()
-        mysql.drop_database()
-        mysql.create_database()
-        mysql.Base.metadata.create_all(self.mysql.engine)
+        self.mysql.drop_database()
+        self.mysql.create_database()
+        self.mysql.Base.metadata.create_all(self.mysql.engine)
 
     def tearDown(self):
 
         self.session.close()
-        mysql.drop_database()
-
-    def test_MySQL(self):
-
-        self.assertEqual(str(self.session.get_bind().url), "mysql+pymysql://root@mysql-klotio:3306/nandy_test")
-
-    def test_Person(self):
-
-        self.session.add(mysql.Person(
-            name="unit",
-            data={"a": 1}
-        ))
-        self.session.commit()
-
-        person = self.session.query(mysql.Person).one()
-        self.assertEqual(str(person), "<Person(name='unit')>")
-        self.assertEqual(person.name, "unit")
-        self.assertEqual(person.data, {"a": 1})
-
-        person.data["a"] = 2
-        self.session.commit()
-        person = self.session.query(mysql.Person).one()
-        self.assertEqual(person.data, {"a": 2})
+        self.mysql.drop_database()
 
     def test_Template(self):
 
@@ -182,12 +148,8 @@ class TestMySQL(unittest.TestCase):
     @unittest.mock.patch("mysql.time.time", unittest.mock.MagicMock(return_value=7))
     def test_Area(self):
 
-        person = mysql.Person(name="unit")
-        self.session.add(person)
-        self.session.commit()
-
         self.session.add(mysql.Area(
-            person_id=person.id,
+            person_id=1,
             name='Unit Test',
             data={"a": 1}
         ))
@@ -195,7 +157,7 @@ class TestMySQL(unittest.TestCase):
 
         area = self.session.query(mysql.Area).one()
         self.assertEqual(str(area), "<Area(name='Unit Test')>")
-        self.assertEqual(area.person_id, person.id)
+        self.assertEqual(area.person_id, 1)
         self.assertEqual(area.name, "Unit Test")
         self.assertEqual(area.status, "positive")
         self.assertEqual(area.created, 7)
@@ -210,20 +172,16 @@ class TestMySQL(unittest.TestCase):
     @unittest.mock.patch("mysql.time.time", unittest.mock.MagicMock(return_value=7))
     def test_Act(self):
 
-        person = mysql.Person(name="unit")
-        self.session.add(person)
-        self.session.commit()
-
         self.session.add(mysql.Act(
-            person_id=person.id,
+            person_id=1,
             name='Unit Test',
             data={"a": 1}
         ))
         self.session.commit()
 
         act = self.session.query(mysql.Act).one()
-        self.assertEqual(str(act), "<Act(name='Unit Test',person='unit',created=7)>")
-        self.assertEqual(act.person_id, person.id)
+        self.assertEqual(str(act), "<Act(name='Unit Test',person_id=1,created=7)>")
+        self.assertEqual(act.person_id, 1)
         self.assertEqual(act.name, "Unit Test")
         self.assertEqual(act.status, "positive")
         self.assertEqual(act.created, 7)
@@ -238,20 +196,16 @@ class TestMySQL(unittest.TestCase):
     @unittest.mock.patch("mysql.time.time", unittest.mock.MagicMock(return_value=7))
     def test_Todo(self):
 
-        person = mysql.Person(name="unit")
-        self.session.add(person)
-        self.session.commit()
-
         self.session.add(mysql.ToDo(
-            person_id=person.id,
+            person_id=1,
             name='Unit Test',
             data={"a": 1}
         ))
         self.session.commit()
 
         todo = self.session.query(mysql.ToDo).one()
-        self.assertEqual(str(todo), "<ToDo(name='Unit Test',person='unit',created=7)>")
-        self.assertEqual(todo.person_id, person.id)
+        self.assertEqual(str(todo), "<ToDo(name='Unit Test',person_id=1,created=7)>")
+        self.assertEqual(todo.person_id, 1)
         self.assertEqual(todo.name, "Unit Test")
         self.assertEqual(todo.status, "opened")
         self.assertEqual(todo.created, 7)
@@ -266,20 +220,16 @@ class TestMySQL(unittest.TestCase):
     @unittest.mock.patch("mysql.time.time", unittest.mock.MagicMock(return_value=7))
     def test_Routine(self):
 
-        person = mysql.Person(name="unit")
-        self.session.add(person)
-        self.session.commit()
-
         self.session.add(mysql.Routine(
-            person_id=person.id,
+            person_id=1,
             name='Unit Test',
             data={"a": 1}
         ))
         self.session.commit()
 
         routine = self.session.query(mysql.Routine).one()
-        self.assertEqual(str(routine), "<Routine(name='Unit Test',person='unit',created=7)>")
-        self.assertEqual(routine.person_id, person.id)
+        self.assertEqual(str(routine), "<Routine(name='Unit Test',person_id=1,created=7)>")
+        self.assertEqual(routine.person_id, 1)
         self.assertEqual(routine.name, "Unit Test")
         self.assertEqual(routine.status, "opened")
         self.assertEqual(routine.created, 7)

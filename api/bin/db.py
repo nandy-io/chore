@@ -2,6 +2,5 @@
 
 import mysql
 
-mysql.create_database()
-data = mysql.MySQL()
-mysql.Base.metadata.create_all(data.engine)
+mysql.MySQL.create_database()
+mysql.MySQL.Base.metadata.create_all(mysql.MySQL().engine)

@@ -21,6 +21,10 @@ spec:
     source:
       site: github.com
       repo: klot-io/mysql
+  - name: people.nandy.io
+    source:
+      site: github.com
+      repo: nandy-io/people
   recommends:
   - name: chore-speech.nandy.io
     source:
