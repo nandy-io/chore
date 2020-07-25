@@ -8,7 +8,7 @@ $.ajaxPrefilter(function(options, originalOptions, jqXHR) {
 
 });
 
-DRApp.group = []; //$.ajax({url: "/api/group", async: false}).responseJSON.group;
+DRApp.group = $.ajax({url: "/api/group", async: false}).responseJSON.group;
 
 DRApp.controller("Base",null,{
     rest: function(type,url,data) {
