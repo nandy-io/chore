@@ -1,5 +1,4 @@
-ARG BASE
-FROM ${BASE}
+FROM klotio/nginx:0.1
 
 COPY etc/kubernetes.conf /etc/nginx/conf.d/default.conf
 

@@ -1,4 +1,3 @@
-MACHINE=$(shell uname -m)
 ACCOUNT=nandyio
 IMAGE=chore-gui
 VERSION?=0.4
@@ -20,7 +19,7 @@ cross:
 	docker run --rm --privileged multiarch/qemu-user-static:register --reset
 
 build:
-	docker build . --build-arg BASE=$(BASE) -t $(ACCOUNT)/$(IMAGE):$(VERSION)
+	docker build . -t $(ACCOUNT)/$(IMAGE):$(VERSION)
 
 network:
 	-docker network create $(NETWORK)
@@ -38,11 +37,7 @@ stop:
 	docker rm -f $(NAME)
 
 push:
-ifeq ($(MACHINE),armv7l)
 	docker push $(ACCOUNT)/$(IMAGE):$(VERSION)
-else
-	echo "Only push armv7l"
-endif
 
 install:
 	kubectl create -f kubernetes/gui.yaml
