@@ -7,12 +7,6 @@ VOLUMES=-v ${PWD}/www/:/opt/service/www/ \
 		-v ${PWD}/etc/docker.conf:/etc/nginx/conf.d/default.conf
 PORT=6771
 
-ifeq ($(MACHINE),armv7l)
-BASE=arm32v7/nginx
-else
-BASE=nginx:1.15.7-alpine
-endif
-
 .PHONY: cross build network shell run start stop push install update remove reset tag
 
 cross:
