@@ -1,18 +1,11 @@
-MACHINE=$(shell uname -m)
 ACCOUNT=nandyio
 IMAGE=chore-gui
-VERSION?=0.3
+VERSION?=0.4
 NAME=$(IMAGE)-$(ACCOUNT)
 NETWORK=klot.io
 VOLUMES=-v ${PWD}/www/:/opt/service/www/ \
 		-v ${PWD}/etc/docker.conf:/etc/nginx/conf.d/default.conf
 PORT=6771
-
-ifeq ($(MACHINE),armv7l)
-BASE=arm32v7/nginx
-else
-BASE=nginx:1.15.7-alpine
-endif
 
 .PHONY: cross build network shell run start stop push install update remove reset tag
 
@@ -20,7 +13,7 @@ cross:
 	docker run --rm --privileged multiarch/qemu-user-static:register --reset
 
 build:
-	docker build . --build-arg BASE=$(BASE) -t $(ACCOUNT)/$(IMAGE):$(VERSION)
+	docker build . -t $(ACCOUNT)/$(IMAGE):$(VERSION)
 
 network:
 	-docker network create $(NETWORK)
@@ -38,11 +31,7 @@ stop:
 	docker rm -f $(NAME)
 
 push:
-ifeq ($(MACHINE),armv7l)
 	docker push $(ACCOUNT)/$(IMAGE):$(VERSION)
-else
-	echo "Only push armv7l"
-endif
 
 install:
 	kubectl create -f kubernetes/gui.yaml

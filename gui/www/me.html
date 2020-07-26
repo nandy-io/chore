@@ -12,13 +12,13 @@
         </thead>
         <tbody>
             {{~it.persons :person}}
-            <tr OnClick="DRApp.go('person_retrieve','{{=person.id}}')" class="clickable">
+            <tr>
                 <td>{{=person.name}}</td>
                 <td>
                     {{?DRApp.me}}
                         {{?DRApp.me == person.name}}
                             Yes
-                            <button 
+                            <button
                                 type="button" class="uk-button uk-button-primary"
                                 OnClick="DRApp.current.controller.not_me(); event.stopPropagation();"
                                 title="this is not me"
@@ -28,7 +28,7 @@
                         {{??}}
                         {{?}}
                     {{??}}
-                        <button 
+                        <button
                             type="button" class="uk-button uk-button-primary"
                             OnClick="DRApp.current.controller.me('{{!person.name}}'); event.stopPropagation();"
                             title="this is me"

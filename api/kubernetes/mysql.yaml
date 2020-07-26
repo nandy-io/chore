@@ -9,7 +9,7 @@ spec:
     spec:
       containers:
       - name: mysql
-        image: docker.io/nandyio/chore-api:0.1
+        image: docker.io/nandyio/chore-api:0.2
         imagePullPolicy: Always
         command: ["/opt/service/bin/db.py"]
         env:

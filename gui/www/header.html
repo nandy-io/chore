@@ -20,8 +20,8 @@
             <li {{? DRApp.current.paths[0] == 'template' }}class="uk-active"{{?}}>
                 <a href="{{=DRApp.link('template_list')}}">Templates</a>
             </li>
-            <li {{? DRApp.current.paths[0] == 'person' }}class="uk-active"{{?}}>
-                <a href="{{=DRApp.link('person_list')}}">Persons</a>
+            <li {{? DRApp.current.paths[0] == 'me' }}class="uk-active"{{?}}>
+                <a href="{{=DRApp.link('me')}}">Me</a>
             </li>
 {{~DRApp.group.members :member}}
             <li>

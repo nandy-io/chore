@@ -32,7 +32,7 @@ shell: network
 	-docker run -it --rm --name=$(NAME) --network=$(NETWORK) $(VOLUMES) $(ENVIRONMENT) $(ACCOUNT)/$(IMAGE):$(VERSION) sh
 
 test: network
-	docker run -it --network=$(NETWORK) $(VOLUMES) $(ENVIRONMENT) -e DATABASE=nandy_test $(ACCOUNT)/$(IMAGE):$(VERSION) sh -c "coverage run -m unittest discover -v test && coverage report -m --include 'lib/*.py'"
+	docker run -it --network=$(NETWORK) $(VOLUMES) $(ENVIRONMENT) -e DATABASE=nandy_chore_test $(ACCOUNT)/$(IMAGE):$(VERSION) sh -c "coverage run -m unittest discover -v test && coverage report -m --include 'lib/*.py'"
 
 db:
 	docker run -it --network=$(NETWORK) $(VOLUMES) $(ENVIRONMENT) $(ACCOUNT)/$(IMAGE):$(VERSION) sh -c "bin/db.py"

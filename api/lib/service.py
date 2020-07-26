@@ -16,6 +16,8 @@ import sqlalchemy.exc
 import opengui
 
 import mysql
+import klotio.service
+import nandyio.people
 
 def app():
 
@@ -28,10 +30,8 @@ def app():
 
     api = flask_restful.Api(app)
 
-    api.add_resource(Health, '/health')
+    api.add_resource(klotio.service.Health, '/health')
     api.add_resource(Group, '/group')
-    api.add_resource(PersonCL, '/person')
-    api.add_resource(PersonRUD, '/person/<int:id>')
     api.add_resource(TemplateCL, '/template')
     api.add_resource(TemplateRUD, '/template/<int:id>')
     api.add_resource(AreaCL, '/area')
@@ -51,332 +51,11 @@ def app():
     return app
 
 
-def require_session(endpoint):
-    @functools.wraps(endpoint)
-    def wrap(*args, **kwargs):
+class Group(klotio.service.Group):
+    APP = "chore.nandy.io"
 
-        flask.request.session = flask.current_app.mysql.session()
 
-        try:
-
-            response = endpoint(*args, **kwargs)
-
-        except sqlalchemy.exc.InvalidRequestError:
-
-            response = flask.make_response(json.dumps({
-                "message": "session error",
-                "traceback": traceback.format_exc()
-            }))
-            response.headers.set('Content-Type', 'application/json')
-            response.status_code = 500
-
-            flask.request.session.rollback()
-
-        except Exception as exception:
-
-            response = flask.make_response(json.dumps({"message": str(exception)}))
-            response.headers.set('Content-Type', 'application/json')
-            response.status_code = 500
-
-        flask.request.session.close()
-
-        return response
-
-    return wrap
-
-
-def validate(fields):
-
-    valid = fields.validate()
-
-    for field in fields.order:
-
-        if field.name != "yaml" or field.value is None:
-            continue
-
-        if not isinstance(yaml.safe_load(field.value), dict):
-            field.errors.append("must be dict")
-            valid = False
-
-    return valid
-
-def notify(message):
-
-    flask.current_app.redis.publish(flask.current_app.channel, json.dumps(message))
-
-class Health(flask_restful.Resource):
-    def get(self):
-        return {"message": "OK"}
-
-class Group(flask_restful.Resource):
-    def get(self):
-        response = requests.get(f"http://{os.environ['NODE_NAME']}:8083/app/chore.nandy.io/member")
-
-        response.raise_for_status()
-
-        return {"group": response.json()}
-
-class Model:
-
-    YAML = [
-        {
-            "name": "yaml",
-            "style": "textarea",
-            "optional": True
-        }
-    ]
-
-    @staticmethod
-    def validate(fields):
-
-        return validate(fields)
-
-    @classmethod
-    def retrieve(cls, id):
-
-        model = flask.request.session.query(
-            cls.MODEL
-        ).get(
-            id
-        )
-
-        flask.request.session.commit()
-        return model
-
-    @staticmethod
-    def derive(integrate):
-
-        if "url" in integrate:
-            response = requests.options(integrate["url"])
-        elif "node" in integrate:
-            response = requests.options(f"http://{os.environ['NODE_NAME']}:8083/node", params=integrate["node"])
-
-        response.raise_for_status()
-
-        return response.json()
-
-    @classmethod
-    def integrate(cls, integration):
-
-        if "integrate" in integration:
-            try:
-                integration.update(cls.derive(integration["integrate"]))
-            except Exception as exception:
-                integration.setdefault("errors", [])
-                integration["errors"].append(f"failed to integrate: {exception}")
-
-        for field in integration.get("fields", []):
-            cls.integrate(field)
-
-        return integration
-
-    @classmethod
-    def integrations(cls):
-
-        integrations = []
-
-        for integration_path in sorted(glob.glob(f"/opt/service/config/integration_*_{cls.SINGULAR}.fields.yaml")):
-            with open(integration_path, "r") as integration_file:
-                integrations.append(cls.integrate({**{"name": integration_path.split("_")[1], **yaml.safe_load(integration_file)}}))
-
-        return integrations
-
-    @classmethod
-    def request(cls, converted):
-
-        values = {}
-
-        integrations = opengui.Fields({}, {}, cls.integrations())
-
-        for field in converted.keys():
-
-            if field in integrations.names:
-                values.setdefault("data", {})
-                values["data"][field] = converted[field]
-            elif field != "yaml":
-                values[field] = converted[field]
-
-        if "yaml" in converted:
-            values.setdefault("data", {})
-            values["data"].update(yaml.safe_load(converted["yaml"]))
-
-        if "data" in converted:
-            values.setdefault("data", {})
-            values["data"].update(converted["data"])
-
-        return values
-
-    @classmethod
-    def response(cls, model):
-
-        converted = {
-            "data": {}
-        }
-
-        integrations = opengui.Fields({}, {}, cls.integrations())
-
-        for field in model.__table__.columns._data.keys():
-            if field != "data":
-                converted[field] = getattr(model, field)
-
-        for field in model.data:
-            if field in integrations.names:
-                converted[field] = model.data[field]
-            else:
-                converted["data"][field] = model.data[field]
-
-        converted["yaml"] = yaml.safe_dump(dict(converted["data"]), default_flow_style=False)
-
-        return converted
-
-    @classmethod
-    def responses(cls, models):
-
-        return [cls.response(model) for model in models]
-
-class RestCL(flask_restful.Resource):
-
-    @classmethod
-    def fields(cls, values=None, originals=None):
-
-        return opengui.Fields(values, originals=originals, fields=copy.deepcopy(cls.FIELDS + cls.integrations() + cls.YAML))
-
-    @require_session
-    def options(self):
-
-        values = flask.request.json[self.SINGULAR] if flask.request.json and self.SINGULAR in flask.request.json else None
-
-        fields = self.fields(values)
-
-        if values is not None and not self.validate(fields):
-            return {"fields": fields.to_list(), "errors": fields.errors}
-        else:
-            return {"fields": fields.to_list()}
-
-    @require_session
-    def post(self):
-
-        model = self.MODEL(**self.request(flask.request.json[self.SINGULAR]))
-        flask.request.session.add(model)
-        flask.request.session.commit()
-
-        return {self.SINGULAR: self.response(model)}, 201
-
-    @require_session
-    def get(self):
-
-        models = flask.request.session.query(
-            self.MODEL
-        ).filter_by(
-            **flask.request.args.to_dict()
-        ).order_by(
-            *self.ORDER
-        ).all()
-        flask.request.session.commit()
-
-        return {self.PLURAL: self.responses(models)}
-
-class RestRUD(flask_restful.Resource):
-
-    ID = [
-        {
-            "name": "id",
-            "readonly": True
-        }
-    ]
-
-    @classmethod
-    def fields(cls, values=None, originals=None):
-
-        return opengui.Fields(values, originals=originals, fields=copy.deepcopy(cls.ID + cls.FIELDS + cls.integrations() + cls.YAML))
-
-    @require_session
-    def options(self, id):
-
-        originals = self.response(self.retrieve(id))
-
-        values = flask.request.json[self.SINGULAR] if flask.request.json and self.SINGULAR in flask.request.json else None
-
-        fields = self.fields(values or originals, originals)
-
-        if values is not None and not self.validate(fields):
-            return {"fields": fields.to_list(), "errors": fields.errors}
-        else:
-            return {"fields": fields.to_list()}
-
-    @require_session
-    def get(self, id):
-
-        return {self.SINGULAR: self.response(self.retrieve(id))}
-
-    @require_session
-    def patch(self, id):
-
-        rows = flask.request.session.query(
-            self.MODEL
-        ).filter_by(
-            id=id
-        ).update(
-            self.request(flask.request.json[self.SINGULAR])
-        )
-        flask.request.session.commit()
-
-        return {"updated": rows}, 202
-
-    @require_session
-    def delete(self, id):
-
-        rows = flask.request.session.query(
-            self.MODEL
-        ).filter_by(
-            id=id
-        ).delete()
-        flask.request.session.commit()
-
-        return {"deleted": rows}, 202
-
-
-class Person(Model):
-
-    SINGULAR = "person"
-    PLURAL = "persons"
-    MODEL = mysql.Person
-    ORDER = [mysql.Person.name]
-
-    FIELDS = [
-        {
-            "name": "name"
-        }
-    ]
-
-    @classmethod
-    def choices(cls):
-
-        ids = []
-        labels = {}
-
-        for model in flask.request.session.query(
-            cls.MODEL
-        ).filter_by(
-            **flask.request.args.to_dict()
-        ).order_by(
-            *cls.ORDER
-        ).all():
-            ids.append(model.id)
-            labels[model.id] = model.name
-
-        flask.request.session.commit()
-
-        return (ids, labels)
-
-class PersonCL(Person, RestCL):
-    pass
-
-class PersonRUD(Person, RestRUD):
-    pass
-
-
-class Template(Model):
+class Template(klotio.service.Model):
 
     SINGULAR = "template"
     PLURAL = "templates"
@@ -491,14 +170,14 @@ class Template(Model):
 
         return "template"
 
-class TemplateCL(Template, RestCL):
+class TemplateCL(Template, klotio.service.RestCL):
 
     @classmethod
     def fields(cls, values=None, originals=None):
 
         return opengui.Fields(values, originals=originals, fields=copy.deepcopy(cls.FIELDS + cls.integrations(cls.form(values, originals)) + cls.YAML))
 
-class TemplateRUD(Template, RestRUD):
+class TemplateRUD(Template, klotio.service.RestRUD):
 
     @classmethod
     def fields(cls, values=None, originals=None):
@@ -506,7 +185,8 @@ class TemplateRUD(Template, RestRUD):
         return opengui.Fields(values, originals=originals, fields=copy.deepcopy(cls.ID + cls.FIELDS + cls.integrations(cls.form(values, originals)) + cls.YAML))
 
 
-class Status(Model):
+
+class Status(klotio.service.Model):
 
     @classmethod
     def build(cls, **kwargs):
@@ -557,11 +237,7 @@ class Status(Model):
         person = kwargs.get("person", fields["data"].get("person"))
 
         if person:
-            fields["person_id"] = flask.request.session.query(
-                mysql.Person
-            ).filter_by(
-                name=person
-            ).one().id
+            fields["person_id"] = nandyio.people.Person.model(name=person)["id"]
 
         for field in ["person_id", "name", "status", "created", "updated"]:
             if field in kwargs:
@@ -580,11 +256,11 @@ class Status(Model):
         model.data["notified"] = time.time()
         model.updated = time.time()
 
-        notify({
+        klotio.service.notify({
             "kind": cls.SINGULAR,
             "action": action,
             cls.SINGULAR: cls.response(model),
-            "person": Person.response(model.person)
+            "person": nandyio.people.Person.model(id=model.person_id)
         })
 
     @classmethod
@@ -599,14 +275,9 @@ class Status(Model):
         return model
 
 
-class StatusCL(RestCL):
+class StatusCL(klotio.service.RestCL):
 
     FIELDS = [
-        {
-            "name": "person_id",
-            "label": "person",
-            "style": "radios"
-        },
         {
             "name": "status",
             "style": "radios"
@@ -626,9 +297,8 @@ class StatusCL(RestCL):
     @classmethod
     def fields(cls, values=None, originals=None):
 
-        fields = opengui.Fields(values, originals=originals, fields=cls.FIELDS + cls.integrations() + cls.YAML)
+        fields = opengui.Fields(values, originals=originals, fields=nandyio.people.Person.fields() + cls.FIELDS + cls.integrations() + cls.YAML)
 
-        fields["person_id"].options, fields["person_id"].content["labels"] = Person.choices()
         fields["status"].options = cls.STATUSES
         fields["template_id"].options, fields["template_id"].content["labels"] = Template.choices(cls.SINGULAR)
 
@@ -641,14 +311,14 @@ class StatusCL(RestCL):
 
         return fields
 
-    @require_session
+    @klotio.service.require_session
     def post(self):
 
         model = self.create(**self.request(flask.request.json[self.SINGULAR]))
 
         return {self.SINGULAR: self.response(model)}, 201
 
-    @require_session
+    @klotio.service.require_session
     def get(self):
 
         since = None
@@ -679,14 +349,9 @@ class StatusCL(RestCL):
 
         return {self.PLURAL: self.responses(models)}
 
-class StatusRUD(RestRUD):
+class StatusRUD(klotio.service.RestRUD):
 
     FIELDS = [
-        {
-            "name": "person_id",
-            "label": "person",
-            "style": "radios"
-        },
         {
             "name": "status",
             "style": "radios"
@@ -709,16 +374,15 @@ class StatusRUD(RestRUD):
     @classmethod
     def fields(cls, values=None, originals=None):
 
-        fields = opengui.Fields(values, originals=originals, fields=cls.ID + cls.FIELDS + cls.integrations() + cls.YAML)
+        fields = opengui.Fields(values, originals=originals, fields=cls.ID + nandyio.people.Person.fields() + cls.FIELDS + cls.integrations() + cls.YAML)
 
-        fields["person_id"].options, fields["person_id"].content["labels"] = Person.choices()
         fields["status"].options = cls.STATUSES
 
         return fields
 
 class StatusA(flask_restful.Resource):
 
-    @require_session
+    @klotio.service.require_session
     def patch(self, id, action):
 
         model = flask.request.session.query(self.MODEL).get(id)
@@ -788,7 +452,7 @@ class Area(Value):
             cls.notify("wrong", model)
 
             if "todo" in model.data:
-                ToDo.create(person_id=model.person.id, data={"area": model.id}, template=model.data["todo"])
+                ToDo.create(person_id=model.person_id, data={"area": model.id}, template=model.data["todo"])
 
             return True
 
@@ -829,7 +493,7 @@ class Act(Value):
                 template["name"] = model.name
                 template["act"] = True
 
-            ToDo.create(person_id=model.person.id, status="opened", template=template)
+            ToDo.create(person_id=model.person_id, status="opened", template=template)
 
         return model
 
@@ -1003,15 +667,9 @@ class ToDo(State):
         """
 
         if "person" in data:
-            person_id = flask.request.session.query(
-                mysql.Person
-            ).filter_by(
-                name=data["person"]
-            ).one().id
+            person = nandyio.people.Person.model(name=data["person"])
         else:
-            person_id = data["person_id"]
-
-        person = flask.request.session.query(mysql.Person).get(person_id)
+            person = nandyio.people.Person.model(id=data["person_id"])
 
         updated = False
 
@@ -1020,7 +678,7 @@ class ToDo(State):
         for todo in flask.request.session.query(
             mysql.ToDo
         ).filter_by(
-            person_id=person_id,
+            person_id=person["id"],
             status="opened"
         ).order_by(
             *ToDo.ORDER
@@ -1032,11 +690,11 @@ class ToDo(State):
 
         if todos:
 
-            notify({
+            klotio.service.notify({
                 "kind": "todos",
                 "action": "remind",
-                "person": Person.response(person),
-                "speech": data.get("speech", {}),
+                "person": person,
+                "chore-speech.nandy.io": data.get("chore-speech.nandy.io", {}),
                 "todos": cls.responses(todos)
             })
 
@@ -1069,7 +727,7 @@ class ToDo(State):
                     del template["notified"]
                     template["name"] = model.name
 
-                Act.create(person_id=model.person.id, status="positive", template=template)
+                Act.create(person_id=model.person_id, status="positive", template=template)
 
             return True
 
@@ -1077,7 +735,7 @@ class ToDo(State):
 
 class ToDoCL(ToDo, StatusCL):
 
-    @require_session
+    @klotio.service.require_session
     def patch(self):
 
         updated = ToDo.todos(flask.request.json["todos"])
@@ -1220,8 +878,8 @@ class Task:
 
     ACTIONS = ["remind", "pause", "unpause", "skip", "unskip", "complete", "uncomplete"]
 
-    @staticmethod
-    def notify(action, task, routine):
+    @classmethod
+    def notify(cls, action, task, routine):
         """
         Notifies somethign happened
         """
@@ -1230,12 +888,12 @@ class Task:
         routine.updated = time.time()
         task["notified"] = time.time()
 
-        notify({
+        klotio.service.notify({
             "kind": "task",
             "action": action,
             "task": task,
             "routine": Routine.response(routine),
-            "person": Person.response(routine.person)
+            "person": nandyio.people.Person.model(id=routine.person_id)
         })
 
     @classmethod
@@ -1368,7 +1026,7 @@ class Task:
 
 class TaskA(Task, flask_restful.Resource):
 
-    @require_session
+    @klotio.service.require_session
     def patch(self, routine_id, task_id, action):
 
         routine = flask.request.session.query(mysql.Routine).get(routine_id)
