@@ -1,0 +1,6 @@
+apiVersion: klot.io/v1
+kind: KlotIOApp
+metadata:
+  name: chore.nandy.io
+status: Installed
+url: http://localhost:6567

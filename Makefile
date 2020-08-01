@@ -1,14 +1,16 @@
 VERSION?=0.3
-NAMESPACE=chore-nandy-io
-.PHONY: install remove reset tag untag
+TILT_PORT=26535
+.PHONY: up down tag untag
 
-install:
-	-kubectl create ns $(NAMESPACE)
+up:
+	mkdir -p config
+	echo "- op: add\n  path: /spec/template/spec/volumes/0/hostPath/path\n  value: $(PWD)/config" > tilt/config.yaml
+	kubectx docker-desktop
+	tilt --port $(TILT_PORT) up
 
-remove:
-	-kubectl delete ns $(NAMESPACE)
-
-reset: remove instal
+down:
+	kubectx docker-desktop
+	tilt down
 
 tag:
 	-git tag -a "v$(VERSION)" -m "Version $(VERSION)"

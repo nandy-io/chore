@@ -1,4 +1,5 @@
 .DS_Store
 .AppleDouble
 *.pyc
-api/config/
+config/
+tilt/config.yaml

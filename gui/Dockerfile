@@ -1,9 +1,5 @@
-FROM klotio/nginx:0.1
+FROM klotio/app:0.1
 
-COPY etc/kubernetes.conf /etc/nginx/conf.d/default.conf
+COPY etc/nginx.conf /etc/nginx/conf.d/default.conf
 
-RUN mkdir -p /opt/service
-
-WORKDIR /opt/service
-
-ADD www www
+COPY www www

@@ -1,20 +1,7 @@
-FROM resin/raspberry-pi-alpine-python:3.6.1
+FROM klotio/python:0.1
 
-RUN apk add git
-
-COPY entry.sh /usr/bin/entry.sh
-
-RUN mkdir -p /opt/service
-
-WORKDIR /opt/service
-
-ADD requirements.txt .
-
-RUN pip install -r requirements.txt
-
-ADD bin bin
-ADD lib lib
-ADD test test
+COPY bin bin
+COPY lib lib
 
 ENV PYTHONPATH "/opt/service/lib:${PYTHONPATH}"
 

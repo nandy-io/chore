@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-import mysql
+import models
 
-mysql.MySQL.create_database()
-mysql.MySQL.Base.metadata.create_all(mysql.MySQL().engine)
+models.MySQL.create_database()
+models.MySQL.Base.metadata.create_all(models.MySQL().engine)

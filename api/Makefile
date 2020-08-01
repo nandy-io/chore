@@ -3,21 +3,20 @@ IMAGE=chore-api
 VERSION=0.2
 NAME=$(IMAGE)-$(ACCOUNT)
 NETWORK=klot.io
-VOLUMES=-v ${PWD}/secret/:/opt/service/secret/ \
-		-v ${PWD}/lib/:/opt/service/lib/ \
+NETWORK=chore.nandy.io
+MYSQL_IMAGE=klotio/mysql:0.3
+MYSQL_HOST=$(ACCOUNT)-$(IMAGE)-mysql
+DEBUG_PORT=16535
+VOLUMES=-v ${PWD}/lib/:/opt/service/lib/ \
+		-v ${PWD}/bin/:/opt/service/bin/ \
 		-v ${PWD}/test/:/opt/service/test/ \
-		-v ${PWD}/bin/:/opt/service/bin/
-ENVIRONMENT=-e SLEEP=0.1 \
-			-e MYSQL_HOST=mysql-klotio \
+		-v ${PWD}/mysql.sh:/opt/service/mysql.sh
+ENVIRONMENT=-e MYSQL_HOST=$(MYSQL_HOST) \
 			-e MYSQL_PORT=3306 \
-			-e REDIS_HOST=redis-klotio \
-			-e REDIS_PORT=6379 \
-			-e REDIS_CHANNEL=nandy.io/chore \
-			-e NODE_NAME=roam-klot-io.local \
+			-e PYTHONDONTWRITEBYTECODE=1 \
 			-e PYTHONUNBUFFERED=1
-PORT=6765
 
-.PHONY: cross build kube network shell test db run start stop push install update remove reset tag
+.PHONY: cross build network shell debug test push install update remove reset
 
 cross:
 	docker run --rm --privileged multiarch/qemu-user-static:register --reset
@@ -28,23 +27,22 @@ build:
 network:
 	-docker network create $(NETWORK)
 
-shell: network
-	-docker run -it --rm --name=$(NAME) --network=$(NETWORK) $(VOLUMES) $(ENVIRONMENT) $(ACCOUNT)/$(IMAGE):$(VERSION) sh
+mysql: network
+	-docker rm --force $(MYSQL_HOST)
+	docker run -d --network=$(NETWORK) -h $(MYSQL_HOST) --name=$(MYSQL_HOST) -e MYSQL_ALLOW_EMPTY_PASSWORD='yes' $(MYSQL_IMAGE)
+	docker run -it --rm --network=$(NETWORK) $(VOLUMES) $(ENVIRONMENT) $(ACCOUNT)/$(IMAGE):$(VERSION) sh -c "./mysql.sh"
 
-test: network
-	docker run -it --network=$(NETWORK) $(VOLUMES) $(ENVIRONMENT) -e DATABASE=nandy_chore_test $(ACCOUNT)/$(IMAGE):$(VERSION) sh -c "coverage run -m unittest discover -v test && coverage report -m --include 'lib/*.py'"
+shell: mysql
+	docker run -it --network=$(NETWORK) $(VOLUMES) $(ENVIRONMENT) $(ACCOUNT)/$(IMAGE):$(VERSION) sh
+	docker rm --force $(MYSQL_HOST)
 
-db:
-	docker run -it --network=$(NETWORK) $(VOLUMES) $(ENVIRONMENT) $(ACCOUNT)/$(IMAGE):$(VERSION) sh -c "bin/db.py"
+debug: mysql
+	docker run -it --network=$(NETWORK) $(VOLUMES) $(ENVIRONMENT) -p 127.0.0.1:$(DEBUG_PORT):5678 $(ACCOUNT)/$(IMAGE):$(VERSION) sh -c "python -m ptvsd --host 0.0.0.0 --port 5678 --wait -m unittest discover -v test"
+	docker rm --force $(MYSQL_HOST)
 
-run: network
-	docker run --rm --name=$(NAME) --network=$(NETWORK) $(VOLUMES) -v ${PWD}/config/:/opt/service/config/ $(ENVIRONMENT) -p 127.0.0.1:$(PORT):80 --expose=80 $(ACCOUNT)/$(IMAGE):$(VERSION)
-
-start: network
-	docker run -d --name=$(NAME) --network=$(NETWORK) $(VOLUMES) -v ${PWD}/config/:/opt/service/config/ $(ENVIRONMENT) -p 127.0.0.1:$(PORT):80 --expose=80 $(ACCOUNT)/$(IMAGE):$(VERSION)
-
-stop:
-	docker rm -f $(NAME)
+test: mysql
+	docker run -it --network=$(NETWORK) $(VOLUMES) $(ENVIRONMENT) $(ACCOUNT)/$(IMAGE):$(VERSION) sh -c "coverage run -m unittest discover -v test && coverage report -m --include 'lib/*.py'"
+	docker rm --force $(MYSQL_HOST)
 
 push:
 	docker push $(ACCOUNT)/$(IMAGE):$(VERSION)
@@ -54,6 +52,7 @@ install:
 	kubectl create -f kubernetes/api.yaml
 
 update:
+	kubectl replace -f kubernetes/mysql.yaml
 	kubectl replace -f kubernetes/api.yaml
 
 remove:
@@ -61,7 +60,3 @@ remove:
 	-kubectl delete -f kubernetes/mysql.yaml
 
 reset: remove install
-
-tag:
-	-git tag -a "v$(VERSION)" -m "Version $(VERSION)"
-	git push origin --tags
