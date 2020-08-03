@@ -11,8 +11,8 @@ import flask
 import opengui
 import sqlalchemy.exc
 
-import mysql
-import test_mysql
+import models
+import test_models
 
 import service
 
@@ -38,7 +38,8 @@ class TestRest(klotio.unittest.TestCase):
         self.app.mysql.create_database()
 
         self.session = self.app.mysql.session()
-        self.sample = test_mysql.Sample(self.session)
+
+        self.sample = test_models.Sample(self.session)
 
         self.app.mysql.Base.metadata.create_all(self.app.mysql.engine)
 
@@ -57,9 +58,6 @@ class TestHealth(TestRest):
 
 class TestGroup(TestRest):
 
-    @unittest.mock.patch.dict(os.environ, {
-        "NODE_NAME": "barry"
-    })
     @unittest.mock.patch("requests.get")
     def test_get(self, mock_get):
 
@@ -74,100 +72,13 @@ class TestGroup(TestRest):
         }]})
 
         mock_get.assert_has_calls([
-            unittest.mock.call("http://barry:8083/app/chore.nandy.io/member"),
+            unittest.mock.call("http://api.klot-io/app/chore.nandy.io/member"),
             unittest.mock.call().raise_for_status(),
             unittest.mock.call().json()
         ])
 
 
 class TestTemplate(TestRest):
-
-    def test_validate(self):
-
-        fields = service.TemplateCL.fields()
-
-        self.assertFalse(service.Template.validate(fields))
-
-        self.assertFields(fields, [
-            {
-                "name": "name",
-                "errors": ["missing value"]
-            },
-            {
-                "name": "kind",
-                "options": [
-                    "area",
-                    "act",
-                    "todo",
-                    "routine"
-                ],
-                "style": "radios",
-                "trigger": True,
-                "errors": ["missing value"]
-            },
-            {
-                "name": "yaml",
-                "style": "textarea",
-                "optional": True
-            }
-        ])
-
-        self.assertEqual(fields.errors, [])
-
-        fields = service.TemplateCL.fields(values={"yaml": "a:1"})
-
-        self.assertFalse(service.Template.validate(fields))
-
-        self.assertEqual(fields["yaml"].errors, ["must be dict"])
-
-        fields = service.TemplateRUD.fields()
-
-        self.assertFalse(service.Template.validate(fields))
-
-        self.assertFields(fields, [
-            {
-                "name": "id",
-                "readonly": True
-            },
-            {
-                "name": "name",
-                "errors": ["missing value"]
-            },
-            {
-                "name": "kind",
-                "options": [
-                    "area",
-                    "act",
-                    "todo",
-                    "routine"
-                ],
-                "style": "radios",
-                "trigger": True,
-                "errors": ["missing value"]
-            },
-            {
-                "name": "yaml",
-                "style": "textarea",
-                "optional": True
-            }
-        ])
-
-        self.assertEqual(fields.errors, [])
-
-        fields = service.TemplateRUD.fields(values={"yaml": "a:1"})
-
-        self.assertFalse(service.Template.validate(fields))
-
-        self.assertEqual(fields["yaml"].errors, ["must be dict"])
-
-    @unittest.mock.patch("flask.request")
-    def test_retrieve(self, mock_request):
-
-        mock_request.session = self.session
-
-        template = self.sample.template("unit", "todo", {"a": 1})
-
-        self.assertEqual(service.Template.retrieve(template.id).name, "unit")
 
     @unittest.mock.patch("glob.glob")
     @unittest.mock.patch("service.open", create=True)
@@ -333,19 +244,25 @@ class TestTemplate(TestRest):
 
         mock_open.assert_called_with("/opt/service/config/integration_unit.test_template.fields.yaml", "r")
 
-    @unittest.mock.patch("flask.request")
-    def test_choices(self, mock_request):
-
-        mock_request.session = self.session
+    def test_choices(self):
 
         unit = self.sample.template("unit", "todo")
         test = self.sample.template("test", "act")
         rest = self.sample.template("rest", "todo")
 
-        (ids, labels) = service.Template.choices("todo")
+        @klotio.service.require_session
+        def choices():
+            response = flask.make_response(json.dumps({"choices": service.Template.choices('todo')}))
+            response.headers.set('Content-Type', 'application/json')
+            response.status_code = 200
+            return response
 
-        self.assertEqual(ids, [rest.id, unit.id])
-        self.assertEqual(labels, {rest.id: "rest", unit.id: "unit"})
+        self.app.add_url_rule('/choices/template', 'choices', choices)
+
+        self.assertStatusValue(self.api.get("/choices/template"), 200, "choices", [
+            [rest.id, unit.id],
+            {str(rest.id): "rest", str(unit.id): "unit"}
+        ])
 
     def test_form(self):
 
@@ -837,150 +754,22 @@ class TestTemplateRUD(TestRest):
 
 class TestArea(TestRest):
 
-    @unittest.mock.patch("flask.request")
     @unittest.mock.patch("nandyio.people.Person", nandyio.unittest.people.MockPerson)
-    def test_validate(self, mock_request):
-
-        mock_request.session = self.session
-
-        template = self.sample.template("test", "area", {"a": 1})
-
-        fields = service.AreaCL.fields()
-
-        self.assertFalse(service.Area.validate(fields))
-
-        self.assertFields(fields, [
-            {
-                "name": "person_id",
-                "label": "person",
-                "style": "radios",
-                "integrate": {
-                    "url": "http://api.people-nandy-io/integrate"
-                },
-                "options": [
-                    1,
-                    2
-                ],
-                "labels": {
-                    1: "unit",
-                    2: "test"
-                },
-                "errors": ["missing value"]
-            },
-            {
-                "name": "status",
-                "options": ['positive', 'negative'],
-                "style": "radios",
-                "errors": ["missing value"]
-            },
-            {
-                "name": "template_id",
-                "label": "template",
-                "options": [template.id],
-                "labels": {template.id: "test"},
-                "style": "select",
-                "trigger": True,
-                "optional": True
-            },
-            {
-                "name": "name",
-                "errors": ["missing value"]
-            },
-            {
-                "name": "yaml",
-                "style": "textarea",
-                "optional": True
-            }
-        ])
-
-        self.assertEqual(fields.errors, [])
-
-        fields = service.AreaCL.fields(values={"yaml": "a:1"})
-
-        self.assertFalse(service.Area.validate(fields))
-
-        self.assertEqual(fields["yaml"].errors, ["must be dict"])
-
-        fields = service.AreaRUD.fields()
-
-        self.assertFalse(service.Area.validate(fields))
-
-        self.assertFields(fields, [
-            {
-                "name": "id",
-                "readonly": True
-            },
-            {
-                "name": "person_id",
-                "label": "person",
-                "style": "radios",
-                "integrate": {
-                    "url": "http://api.people-nandy-io/integrate"
-                },
-                "options": [
-                    1,
-                    2
-                ],
-                "labels": {
-                    1: "unit",
-                    2: "test"
-                },
-                "errors": ["missing value"]
-            },
-            {
-                "name": "status",
-                "options": ['positive', 'negative'],
-                "style": "radios",
-                "errors": ["missing value"]
-            },
-            {
-                "name": "name",
-                "errors": ["missing value"]
-            },
-            {
-                "name": "created",
-                "style": "datetime",
-                "readonly": True
-            },
-            {
-                "name": "updated",
-                "style": "datetime",
-                "readonly": True
-            },
-            {
-                "name": "yaml",
-                "style": "textarea",
-                "optional": True
-            }
-        ])
-
-        self.assertEqual(fields.errors, [])
-
-        fields = service.AreaRUD.fields(values={"yaml": "a:1"})
-
-        self.assertFalse(service.Area.validate(fields))
-
-        self.assertEqual(fields["yaml"].errors, ["must be dict"])
-
-    @unittest.mock.patch("flask.request")
-    def test_retrieve(self, mock_request):
-
-        mock_request.session = self.session
-
-        area = self.sample.area("unit", "test")
-
-        self.assertEqual(service.Area.retrieve(area.id).name, "test")
-
-    @unittest.mock.patch("nandyio.people.Person", nandyio.unittest.people.MockPerson)
-    @unittest.mock.patch("flask.request")
     @unittest.mock.patch("service.time.time", unittest.mock.MagicMock(return_value=7))
-    def test_build(self, mock_request):
+    def test_build(self):
 
-        mock_request.session = self.session
+        @klotio.service.require_session
+        def build():
+            response = flask.make_response(json.dumps({"build": service.Area.build(**flask.request.json)}))
+            response.headers.set('Content-Type', 'application/json')
+            response.status_code = 200
+            return response
+
+        self.app.add_url_rule('/build/area', 'build', build)
 
         # basic
 
-        self.assertEqual(service.Area.build(**{
+        self.assertStatusValue(self.api.get("/build/area", json={
             "template_id": 0,
             "data": {
                 "by": "data",
@@ -990,7 +779,7 @@ class TestArea(TestRest):
                 "created": 1,
                 "updated": 2
             }
-        }), {
+        }), 200, "build", {
             "person_id": 1,
             "name": "hey",
             "status": "positive",
@@ -1008,14 +797,14 @@ class TestArea(TestRest):
 
         # template by data, person by name
 
-        self.assertEqual(service.Area.build(**{
+        self.assertStatusValue(self.api.get("/build/area", json={
             "template": {
                 "by": "template",
                 "name": "hey",
                 "person": "nope"
             },
             "person": "unit"
-        }), {
+        }), 200, "build", {
             "name": "hey",
             "person_id": 1,
             "data": {
@@ -1027,16 +816,16 @@ class TestArea(TestRest):
 
         # template by id, person by name in template
 
-        template = self.sample.template("unit", "area", data={
+        template_id = self.sample.template("unit", "area", data={
             "by": "template_id",
             "status": "negative",
             "person": "unit"
-        })
+        }).id
 
-        self.assertEqual(service.Area.build(**{
+        self.assertStatusValue(self.api.get("/build/area", json={
             "name": "hey",
-            "template_id": template.id
-        }), {
+            "template_id": template_id
+        }), 200, "build", {
             "name": "hey",
             "person_id": 1,
             "status": "negative",
@@ -1050,10 +839,10 @@ class TestArea(TestRest):
 
         # template by name
 
-        self.assertEqual(service.Area.build(**{
+        self.assertStatusValue(self.api.get("/build/area", json={
             "name": "hey",
             "template": "unit"
-        }), {
+        }), 200, "build", {
             "name": "hey",
             "person_id": 1,
             "status": "negative",
@@ -1085,70 +874,100 @@ class TestArea(TestRest):
         })
 
     @unittest.mock.patch("nandyio.people.Person", nandyio.unittest.people.MockPerson)
-    @unittest.mock.patch("flask.request")
     @unittest.mock.patch("service.time.time", unittest.mock.MagicMock(return_value=7))
     @unittest.mock.patch("klotio.service.notify")
-    def test_create(self, mock_notify, mock_request):
+    def test_create(self, mock_notify):
 
-        mock_request.session = self.session
+        @klotio.service.require_session
+        def create():
+            item = service.Area.create(**flask.request.json)
+            flask.request.session.commit()
+            response = flask.make_response(json.dumps({"create": item.id}))
+            response.headers.set('Content-Type', 'application/json')
+            response.status_code = 200
+            return response
 
-        model = service.Area.create(**{
+        self.app.add_url_rule('/create/area', 'create', create)
+
+        area_id = self.api.get("/create/area", json={
             "person_id": 1,
             "name": "unit",
             "created": 6,
             "data": {
                 "text": "hey"
             }
-        })
+        }).json["create"]
 
-        self.assertEqual(model.person_id, 1)
-        self.assertEqual(model.name, "unit")
-        self.assertEqual(model.status, "positive")
-        self.assertEqual(model.created, 6)
-        self.assertEqual(model.updated, 7)
-        self.assertEqual(model.data, {
+        item = self.session.query(models.Area).get(area_id)
+        self.session.commit()
+
+        self.assertEqual(item.person_id, 1)
+        self.assertEqual(item.name, "unit")
+        self.assertEqual(item.status, "positive")
+        self.assertEqual(item.created, 6)
+        self.assertEqual(item.updated, 7)
+        self.assertEqual(item.data, {
             "text": "hey",
             "notified": 7
         })
 
-        item = self.session.query(mysql.Area).get(model.id)
-        flask.request.session.commit()
-        self.assertEqual(item.name, "unit")
-
         mock_notify.assert_called_once_with({
             "kind": "area",
             "action": "create",
-            "area": service.Area.response(model),
+            "area": service.Area.response(item),
             "person": nandyio.unittest.people.MockPerson.model(name="unit")
         })
 
-    @unittest.mock.patch("flask.request")
+    @unittest.mock.patch("nandyio.people.Person", nandyio.unittest.people.MockPerson)
     @unittest.mock.patch("service.time.time", unittest.mock.MagicMock(return_value=7))
-    @unittest.mock.patch("service.Status.notify")
-    def test_wrong(self, mock_notify, mock_request):
+    @unittest.mock.patch("klotio.service.notify")
+    def test_wrong(self, mock_notify):
 
-        mock_request.session = self.session
+        self.app.mysql.session = unittest.mock.MagicMock(return_value=self.session)
 
-        model = self.sample.area("unit", "hey", data={
+        area = self.sample.area("unit", "hey", data={
             "todo": {
                 "name": "Unit",
                 "text": "test"
             }
         })
 
-        self.assertTrue(service.Area.wrong(model))
-        self.assertEqual(model.status, "negative")
-        item = self.session.query(mysql.ToDo).all()[0]
-        self.assertEqual(item.person_id, model.person_id)
-        self.assertEqual(item.name, "Unit")
-        self.assertEqual(item.data["text"], "test")
-        self.assertEqual(item.data["area"], model.id)
-        mock_notify.assert_has_calls([
-            unittest.mock.call("wrong", model),
-            unittest.mock.call("create", item)
-        ])
+        area_id = area.id
 
-        self.assertFalse(service.Area.wrong(model))
+        @klotio.service.require_session
+        def wrong():
+            area = self.session.query(models.Area).get(flask.request.json["wrong"])
+            response = flask.make_response(json.dumps({"wrong": service.Area.wrong(area)}))
+            flask.request.session.commit()
+            response.headers.set('Content-Type', 'application/json')
+            response.status_code = 200
+            return response
+
+        self.app.add_url_rule('/wrong/area', 'wrong', wrong)
+
+        self.assertTrue(self.api.get("/wrong/area", json={"wrong": area_id}).json["wrong"])
+        area = self.session.query(models.Area).get(area_id)
+        self.assertEqual(area.status, "negative")
+        todo = self.session.query(models.ToDo).all()[0]
+        self.assertEqual(todo.person_id, area.person_id)
+        self.assertEqual(todo.name, "Unit")
+        self.assertEqual(todo.data["text"], "test")
+        self.assertEqual(todo.data["area"], area.id)
+
+        self.assertEqual(mock_notify.call_args_list[0].args[0], {
+            "kind": "area",
+            "action": "wrong",
+            "area": service.Area.response(area),
+            "person": nandyio.unittest.people.MockPerson.model(name="unit")
+        })
+        self.assertEqual(mock_notify.call_args_list[1].args[0], {
+            "kind": "todo",
+            "action": "create",
+            "todo": service.ToDo.response(todo),
+            "person": nandyio.unittest.people.MockPerson.model(name="unit")
+        })
+
+        self.assertFalse(self.api.get("/wrong/area", json={"wrong": area_id}).json["wrong"])
         self.assertEqual(mock_notify.call_count, 2)
 
     @unittest.mock.patch("service.time.time", unittest.mock.MagicMock(return_value=7))
@@ -1170,8 +989,7 @@ class TestAreaCL(TestRest):
     @unittest.mock.patch("glob.glob")
     @unittest.mock.patch("service.open", create=True)
     @unittest.mock.patch("klotio.service.open", create=True)
-    @unittest.mock.patch("flask.request")
-    def test_fields(self, mock_request, mock_klotio_open, mock_open, mock_glob):
+    def test_fields(self, mock_klotio_open, mock_open, mock_glob):
 
         def glob(pattern):
 
@@ -1191,11 +1009,19 @@ class TestAreaCL(TestRest):
             unittest.mock.mock_open(read_data=yaml.safe_dump({"description": "integrate"})).return_value
         ]
 
-        mock_request.session = self.session
+        template_id = self.sample.template("test", "area", {"a": 1}).id
 
-        template = self.sample.template("test", "area", {"a": 1})
+        @klotio.service.require_session
+        def blank_fields():
 
-        self.assertEqual(service.AreaCL.fields().to_list(), [
+            response = flask.make_response(json.dumps({"fields": service.AreaCL.fields().to_list()}))
+            response.headers.set('Content-Type', 'application/json')
+            response.status_code = 200
+            return response
+
+        self.app.add_url_rule('/blank_fields/areacl', 'blank_fields', blank_fields)
+
+        self.assertEqual(self.api.get('/blank_fields/areacl').json["fields"], [
             {
                 "name": "person_id",
                 "label": "person",
@@ -1208,8 +1034,8 @@ class TestAreaCL(TestRest):
                     2
                 ],
                 "labels": {
-                    1: "unit",
-                    2: "test"
+                    '1': "unit",
+                    '2': "test"
                 }
             },
             {
@@ -1220,8 +1046,8 @@ class TestAreaCL(TestRest):
             {
                 "name": "template_id",
                 "label": "template",
-                "options": [template.id],
-                "labels": {template.id: "test"},
+                "options": [template_id],
+                "labels": {str(template_id): "test"},
                 "style": "select",
                 "trigger": True,
                 "optional": True
@@ -1242,7 +1068,17 @@ class TestAreaCL(TestRest):
 
         mock_klotio_open.assert_called_once_with("/opt/service/config/integration_unit.test_area.fields.yaml", "r")
 
-        self.assertEqual(service.AreaCL.fields({"template_id": template.id}).to_list(), [
+        @klotio.service.require_session
+        def template_fields():
+
+            response = flask.make_response(json.dumps({"fields": service.AreaCL.fields({"template_id": template_id}).to_list()}))
+            response.headers.set('Content-Type', 'application/json')
+            response.status_code = 200
+            return response
+
+        self.app.add_url_rule('/template_fields/areacl', 'template_fields', template_fields)
+
+        self.assertEqual(self.api.get('/template_fields/areacl').json["fields"], [
             {
                 "name": "person_id",
                 "label": "person",
@@ -1255,8 +1091,8 @@ class TestAreaCL(TestRest):
                     2
                 ],
                 "labels": {
-                    1: "unit",
-                    2: "test"
+                    '1': "unit",
+                    '2': "test"
                 }
             },
             {
@@ -1267,11 +1103,11 @@ class TestAreaCL(TestRest):
             {
                 "name": "template_id",
                 "label": "template",
-                "options": [template.id],
-                "labels": {template.id: "test"},
+                "options": [template_id],
+                "labels": {str(template_id): "test"},
                 "style": "select",
                 "trigger": True,
-                "value": template.id,
+                "value": template_id,
                 "optional": True
             },
             {
@@ -1295,7 +1131,7 @@ class TestAreaCL(TestRest):
     @unittest.mock.patch("nandyio.people.Person", nandyio.unittest.people.MockPerson)
     def test_options(self):
 
-        template = self.sample.template("test", "area", {"a": 1})
+        template_id = self.sample.template("test", "area", {"a": 1}).id
 
         response = self.api.options("/area")
 
@@ -1324,8 +1160,8 @@ class TestAreaCL(TestRest):
             {
                 "name": "template_id",
                 "label": "template",
-                "options": [template.id],
-                "labels": {str(template.id): "test"},
+                "options": [template_id],
+                "labels": {str(template_id): "test"},
                 "style": "select",
                 "trigger": True,
                 "optional": True
@@ -1371,8 +1207,8 @@ class TestAreaCL(TestRest):
             {
                 "name": "template_id",
                 "label": "template",
-                "options": [template.id],
-                "labels": {str(template.id): "test"},
+                "options": [template_id],
+                "labels": {str(template_id): "test"},
                 "style": "select",
                 "trigger": True,
                 "optional": True
@@ -1393,7 +1229,7 @@ class TestAreaCL(TestRest):
         response = self.api.options("/area", json={"area": {
             "person_id": 1,
             "status": "positive",
-            "template_id": template.id
+            "template_id": template_id
         }})
 
         self.assertStatusFields(response, 200, [
@@ -1423,12 +1259,12 @@ class TestAreaCL(TestRest):
             {
                 "name": "template_id",
                 "label": "template",
-                "options": [template.id],
-                "labels": {str(template.id): "test"},
+                "options": [template_id],
+                "labels": {str(template_id): "test"},
                 "style": "select",
                 "trigger": True,
                 "optional": True,
-                "value": template.id
+                "value": template_id
             },
             {
                 "name": "name",
@@ -1495,8 +1331,7 @@ class TestAreaRUD(TestRest):
     @unittest.mock.patch("nandyio.people.Person", nandyio.unittest.people.MockPerson)
     @unittest.mock.patch("glob.glob")
     @unittest.mock.patch("klotio.service.open", create=True)
-    @unittest.mock.patch("flask.request")
-    def test_fields(self, mock_request, mock_open, mock_glob):
+    def test_fields(self, mock_open, mock_glob):
 
         def glob(pattern):
 
@@ -1511,9 +1346,17 @@ class TestAreaRUD(TestRest):
             unittest.mock.mock_open(read_data=yaml.safe_dump({"description": "integrate"})).return_value
         ]
 
-        mock_request.session = self.session
+        @klotio.service.require_session
+        def fields():
 
-        self.assertEqual(service.AreaRUD.fields().to_list(), [
+            response = flask.make_response(json.dumps({"fields": service.AreaRUD.fields().to_list()}))
+            response.headers.set('Content-Type', 'application/json')
+            response.status_code = 200
+            return response
+
+        self.app.add_url_rule('/fields/arearud', 'fields', fields)
+
+        self.assertEqual(self.api.get('/fields/arearud').json["fields"], [
             {
                 "name": "id",
                 "readonly": True
@@ -1530,8 +1373,8 @@ class TestAreaRUD(TestRest):
                     2
                 ],
                 "labels": {
-                    1: "unit",
-                    2: "test"
+                    '1': "unit",
+                    '2': "test"
                 }
             },
             {
@@ -1568,16 +1411,16 @@ class TestAreaRUD(TestRest):
     @unittest.mock.patch("nandyio.people.Person", nandyio.unittest.people.MockPerson)
     def test_options(self):
 
-        area = self.sample.area("unit", "test", status="positive", data={"a": 1})
+        area_id = self.sample.area("unit", "test", status="positive", data={"a": 1}).id
 
-        response = self.api.options(f"/area/{area.id}")
+        response = self.api.options(f"/area/{area_id}")
 
         self.assertStatusFields(response, 200, [
             {
                 "name": "id",
                 "readonly": True,
-                "value": area.id,
-                "original": area.id
+                "value": area_id,
+                "original": area_id
             },
             {
                 "name": "person_id",
@@ -1632,7 +1475,7 @@ class TestAreaRUD(TestRest):
             }
         ])
 
-        response = self.api.options(f"/area/{area.id}", json={"area": {
+        response = self.api.options(f"/area/{area_id}", json={"area": {
             "nope": "bad"
         }})
 
@@ -1640,8 +1483,8 @@ class TestAreaRUD(TestRest):
             {
                 "name": "id",
                 "readonly": True,
-                "value": area.id,
-                "original": area.id
+                "value": area_id,
+                "original": area_id
             },
             {
                 "name": "person_id",
@@ -1697,8 +1540,7 @@ class TestAreaRUD(TestRest):
             "unknown field 'nope'"
         ])
 
-
-        response = self.api.options(f"/area/{area.id}", json={"area": {
+        response = self.api.options(f"/area/{area_id}", json={"area": {
             "person_id": 2,
             "name": "yup",
             "status": "negative",
@@ -1709,8 +1551,8 @@ class TestAreaRUD(TestRest):
             {
                 "name": "id",
                 "readonly": True,
-                "value": area.id,
-                "original": area.id
+                "value": area_id,
+                "original": area_id
             },
             {
                 "name": "person_id",
@@ -1767,32 +1609,32 @@ class TestAreaRUD(TestRest):
 
     def test_get(self):
 
-        area = self.sample.area("unit", "test")
+        area_id = self.sample.area("unit", "test").id
 
-        self.assertStatusModel(self.api.get(f"/area/{area.id}"), 200, "area", {
+        self.assertStatusModel(self.api.get(f"/area/{area_id}"), 200, "area", {
             "name": "test"
         })
 
     def test_patch(self):
 
-        area = self.sample.area("unit", "test")
+        area_id = self.sample.area("unit", "test").id
 
-        self.assertStatusValue(self.api.patch(f"/area/{area.id}", json={
+        self.assertStatusValue(self.api.patch(f"/area/{area_id}", json={
             "area": {
                 "status": "negative"
             }
         }), 202, "updated", 1)
 
-        self.assertStatusModel(self.api.get(f"/area/{area.id}"), 200, "area", {
+        self.assertStatusModel(self.api.get(f"/area/{area_id}"), 200, "area", {
             "name": "test",
             "status": "negative"
         })
 
     def test_delete(self):
 
-        area = self.sample.area("unit", "test")
+        area_id = self.sample.area("unit", "test").id
 
-        self.assertStatusValue(self.api.delete(f"/area/{area.id}"), 202, "deleted", 1)
+        self.assertStatusValue(self.api.delete(f"/area/{area_id}"), 202, "deleted", 1)
 
         self.assertStatusModels(self.api.get("/area"), 200, "areas", [])
 
@@ -1802,171 +1644,43 @@ class TestAreaA(TestRest):
     @unittest.mock.patch("service.time.time", unittest.mock.MagicMock(return_value=7))
     def test_patch(self):
 
-        model = self.sample.area("unit", "hey")
+        area_id = self.sample.area("unit", "test").id
 
         # wrong
 
-        self.assertStatusValue(self.api.patch(f"/area/{model.id}/wrong"), 202, "updated", True)
-        item = self.session.query(mysql.Area).get(model.id)
+        self.assertStatusValue(self.api.patch(f"/area/{area_id}/wrong"), 202, "updated", True)
+        item = self.session.query(models.Area).get(area_id)
         self.session.commit()
         self.assertEqual(item.status, "negative")
-        self.assertStatusValue(self.api.patch(f"/area/{model.id}/wrong"), 202, "updated", False)
+        self.assertStatusValue(self.api.patch(f"/area/{area_id}/wrong"), 202, "updated", False)
 
         # right
 
-        self.assertStatusValue(self.api.patch(f"/area/{model.id}/right"), 202, "updated", True)
-        item = self.session.query(mysql.Area).get(model.id)
+        self.assertStatusValue(self.api.patch(f"/area/{area_id}/right"), 202, "updated", True)
+        item = self.session.query(models.Area).get(area_id)
         self.session.commit()
         self.assertEqual(item.status, "positive")
-        self.assertStatusValue(self.api.patch(f"/area/{model.id}/right"), 202, "updated", False)
+        self.assertStatusValue(self.api.patch(f"/area/{area_id}/right"), 202, "updated", False)
 
 
 class TestAct(TestRest):
 
     @unittest.mock.patch("nandyio.people.Person", nandyio.unittest.people.MockPerson)
-    @unittest.mock.patch("flask.request")
-    def test_validate(self, mock_request):
-
-        mock_request.session = self.session
-
-        template = self.sample.template("test", "act", {"a": 1})
-
-        fields = service.ActCL.fields()
-
-        self.assertFalse(service.Act.validate(fields))
-
-        self.assertFields(fields, [
-            {
-                "name": "person_id",
-                "label": "person",
-                "style": "radios",
-                "integrate": {
-                    "url": "http://api.people-nandy-io/integrate"
-                },
-                "options": [
-                    1,
-                    2
-                ],
-                "labels": {
-                    1: "unit",
-                    2: "test"
-                },
-                "errors": ["missing value"]
-            },
-            {
-                "name": "status",
-                "options": ['positive', 'negative'],
-                "style": "radios",
-                "errors": ["missing value"]
-            },
-            {
-                "name": "template_id",
-                "label": "template",
-                "options": [template.id],
-                "labels": {template.id: "test"},
-                "style": "select",
-                "trigger": True,
-                "optional": True
-            },
-            {
-                "name": "name",
-                "errors": ["missing value"]
-            },
-            {
-                "name": "yaml",
-                "style": "textarea",
-                "optional": True
-            }
-        ])
-
-        self.assertEqual(fields.errors, [])
-
-        fields = service.ActCL.fields(values={"yaml": "a:1"})
-
-        self.assertFalse(service.Act.validate(fields))
-
-        self.assertEqual(fields["yaml"].errors, ["must be dict"])
-
-        fields = service.ActRUD.fields()
-
-        self.assertFalse(service.Act.validate(fields))
-
-        self.assertFields(fields, [
-            {
-                "name": "id",
-                "readonly": True
-            },
-            {
-                "name": "person_id",
-                "label": "person",
-                "style": "radios",
-                "integrate": {
-                    "url": "http://api.people-nandy-io/integrate"
-                },
-                "options": [
-                    1,
-                    2
-                ],
-                "labels": {
-                    1: "unit",
-                    2: "test"
-                },
-                "errors": ["missing value"]
-            },
-            {
-                "name": "status",
-                "options": ['positive', 'negative'],
-                "style": "radios",
-                "errors": ["missing value"]
-            },
-            {
-                "name": "name",
-                "errors": ["missing value"]
-            },
-            {
-                "name": "created",
-                "style": "datetime",
-                "readonly": True
-            },
-            {
-                "name": "updated",
-                "style": "datetime",
-                "readonly": True
-            },
-            {
-                "name": "yaml",
-                "style": "textarea",
-                "optional": True
-            }
-        ])
-
-        self.assertEqual(fields.errors, [])
-
-        fields = service.ActRUD.fields(values={"yaml": "a:1"})
-
-        self.assertFalse(service.Act.validate(fields))
-
-        self.assertEqual(fields["yaml"].errors, ["must be dict"])
-
-    @unittest.mock.patch("flask.request")
-    def test_retrieve(self, mock_request):
-
-        mock_request.session = self.session
-
-        act = self.sample.act("unit", "test")
-
-        self.assertEqual(service.Act.retrieve(act.id).name, "test")
-
-    @unittest.mock.patch("nandyio.people.Person", nandyio.unittest.people.MockPerson)
-    @unittest.mock.patch("flask.request")
     @unittest.mock.patch("service.time.time", unittest.mock.MagicMock(return_value=7))
-    def test_build(self, mock_request):
+    def test_build(self):
 
-        mock_request.session = self.session
+        @klotio.service.require_session
+        def build():
+            response = flask.make_response(json.dumps({"build": service.Act.build(**flask.request.json)}))
+            response.headers.set('Content-Type', 'application/json')
+            response.status_code = 200
+            return response
+
+        self.app.add_url_rule('/build/act', 'build', build)
 
         # basic
 
-        self.assertEqual(service.Act.build(**{
+        self.assertStatusValue(self.api.get("/build/act", json={
             "template_id": 0,
             "data": {
                 "by": "data",
@@ -1976,7 +1690,7 @@ class TestAct(TestRest):
                 "created": 1,
                 "updated": 2
             }
-        }), {
+        }), 200, "build", {
             "person_id": 1,
             "name": "hey",
             "status": "positive",
@@ -1994,7 +1708,7 @@ class TestAct(TestRest):
 
         # template by data, person by name
 
-        self.assertEqual(service.Act.build(**{
+        self.assertStatusValue(self.api.get("/build/act", json={
             "template": {
                 "by": "template",
                 "name": "hey",
@@ -2002,7 +1716,7 @@ class TestAct(TestRest):
                 "person": "nope"
             },
             "person": "unit"
-        }), {
+        }), 200, "build", {
             "name": "hey",
             "person_id": 1,
             "data": {
@@ -2014,16 +1728,16 @@ class TestAct(TestRest):
 
         # template by id, person by name in template
 
-        template = self.sample.template("unit", "act", data={
+        template_id = self.sample.template("unit", "act", data={
             "by": "template_id",
             "status": "negative",
             "person": "unit"
-        })
+        }).id
 
-        self.assertEqual(service.Act.build(**{
+        self.assertStatusValue(self.api.get("/build/act", json={
             "name": "hey",
-            "template_id": template.id
-        }), {
+            "template_id": template_id
+        }), 200, "build", {
             "name": "hey",
             "person_id": 1,
             "status": "negative",
@@ -2037,10 +1751,10 @@ class TestAct(TestRest):
 
         # template by name
 
-        self.assertEqual(service.Act.build(**{
+        self.assertStatusValue(self.api.get("/build/act", json={
             "name": "hey",
             "template": "unit"
-        }), {
+        }), 200, "build", {
             "name": "hey",
             "person_id": 1,
             "status": "negative",
@@ -2072,14 +1786,22 @@ class TestAct(TestRest):
         })
 
     @unittest.mock.patch("nandyio.people.Person", nandyio.unittest.people.MockPerson)
-    @unittest.mock.patch("flask.request")
     @unittest.mock.patch("service.time.time", unittest.mock.MagicMock(return_value=7))
     @unittest.mock.patch("klotio.service.notify")
-    def test_create(self, mock_notify, mock_request):
+    def test_create(self, mock_notify):
 
-        mock_request.session = self.session
+        @klotio.service.require_session
+        def create():
+            item = service.Act.create(**flask.request.json)
+            flask.request.session.commit()
+            response = flask.make_response(json.dumps({"create": item.id}))
+            response.headers.set('Content-Type', 'application/json')
+            response.status_code = 200
+            return response
 
-        model = service.Act.create(**{
+        self.app.add_url_rule('/create/act', 'create', create)
+
+        act_id = self.api.get("/create/act", json={
             "person_id": 1,
             "name": "unit",
             "status": "negative",
@@ -2091,7 +1813,10 @@ class TestAct(TestRest):
                     "text": "test"
                 }
             }
-        })
+        }).json["create"]
+
+        model = self.session.query(models.Act).get(act_id)
+        self.session.commit()
 
         self.assertEqual(model.person_id, 1)
         self.assertEqual(model.name, "unit")
@@ -2107,12 +1832,12 @@ class TestAct(TestRest):
             }
         })
 
-        todo = self.session.query(mysql.ToDo).filter_by(name="Unit").all()[0]
-        flask.request.session.commit()
+        todo = self.session.query(models.ToDo).filter_by(name="Unit").all()[0]
+        self.session.commit()
         self.assertEqual(todo.data["text"], "test")
 
-        item = self.session.query(mysql.Act).get(model.id)
-        flask.request.session.commit()
+        item = self.session.query(models.Act).get(model.id)
+        self.session.commit()
         self.assertEqual(item.name, "unit")
 
         mock_notify.assert_has_calls([
@@ -2130,7 +1855,7 @@ class TestAct(TestRest):
             })
         ])
 
-        model = service.Act.create(**{
+        self.api.get("/create/act", json={
             "person_id": 1,
             "name": "test",
             "status": "negative",
@@ -2140,9 +1865,9 @@ class TestAct(TestRest):
                 "todo": True
             }
         })
+        self.session.commit()
 
-        todo = self.session.query(mysql.ToDo).filter_by(name="test").all()[0]
-        flask.request.session.commit()
+        todo = self.session.query(models.ToDo).filter_by(name="test").all()[0]
         self.assertEqual(todo.data, {
             "name": "test",
             "text": "hey",
@@ -2182,8 +1907,7 @@ class TestActCL(TestRest):
     @unittest.mock.patch("glob.glob")
     @unittest.mock.patch("service.open", create=True)
     @unittest.mock.patch("klotio.service.open", create=True)
-    @unittest.mock.patch("flask.request")
-    def test_fields(self, mock_request, mock_klotio_open, mock_open, mock_glob):
+    def test_fields(self, mock_klotio_open, mock_open, mock_glob):
 
         def glob(pattern):
 
@@ -2203,11 +1927,19 @@ class TestActCL(TestRest):
             unittest.mock.mock_open(read_data=yaml.safe_dump({"description": "integrate"})).return_value
         ]
 
-        mock_request.session = self.session
+        template_id = self.sample.template("test", "act", {"a": 1}).id
 
-        template = self.sample.template("test", "act", {"a": 1})
+        @klotio.service.require_session
+        def blank_fields():
 
-        self.assertEqual(service.ActCL.fields().to_list(), [
+            response = flask.make_response(json.dumps({"fields": service.ActCL.fields().to_list()}))
+            response.headers.set('Content-Type', 'application/json')
+            response.status_code = 200
+            return response
+
+        self.app.add_url_rule('/blank_fields/actcl', 'blank_fields', blank_fields)
+
+        self.assertEqual(self.api.get('/blank_fields/actcl').json["fields"], [
             {
                 "name": "person_id",
                 "label": "person",
@@ -2220,8 +1952,8 @@ class TestActCL(TestRest):
                     2
                 ],
                 "labels": {
-                    1: "unit",
-                    2: "test"
+                    '1': "unit",
+                    '2': "test"
                 }
             },
             {
@@ -2232,8 +1964,8 @@ class TestActCL(TestRest):
             {
                 "name": "template_id",
                 "label": "template",
-                "options": [template.id],
-                "labels": {template.id: "test"},
+                "options": [template_id],
+                "labels": {str(template_id): "test"},
                 "style": "select",
                 "trigger": True,
                 "optional": True
@@ -2254,7 +1986,17 @@ class TestActCL(TestRest):
 
         mock_klotio_open.assert_called_once_with("/opt/service/config/integration_unit.test_act.fields.yaml", "r")
 
-        self.assertEqual(service.ActCL.fields({"template_id": template.id}).to_list(), [
+        @klotio.service.require_session
+        def template_fields():
+
+            response = flask.make_response(json.dumps({"fields": service.ActCL.fields({"template_id": template_id}).to_list()}))
+            response.headers.set('Content-Type', 'application/json')
+            response.status_code = 200
+            return response
+
+        self.app.add_url_rule('/template_fields/actcl', 'template_fields', template_fields)
+
+        self.assertEqual(self.api.get('/template_fields/actcl').json["fields"], [
             {
                 "name": "person_id",
                 "label": "person",
@@ -2267,8 +2009,8 @@ class TestActCL(TestRest):
                     2
                 ],
                 "labels": {
-                    1: "unit",
-                    2: "test"
+                    '1': "unit",
+                    '2': "test"
                 }
             },
             {
@@ -2279,12 +2021,12 @@ class TestActCL(TestRest):
             {
                 "name": "template_id",
                 "label": "template",
-                "options": [template.id],
-                "labels": {template.id: "test"},
+                "options": [template_id],
+                "labels": {str(template_id): "test"},
                 "style": "select",
                 "trigger": True,
                 "optional": True,
-                "value": template.id
+                "value": template_id
             },
             {
                 "name": "name",
@@ -2307,7 +2049,7 @@ class TestActCL(TestRest):
     @unittest.mock.patch("nandyio.people.Person", nandyio.unittest.people.MockPerson)
     def test_options(self):
 
-        template = self.sample.template("test", "act", {"a": 1})
+        template_id = self.sample.template("test", "act", {"a": 1}).id
 
         response = self.api.options("/act")
 
@@ -2336,8 +2078,8 @@ class TestActCL(TestRest):
             {
                 "name": "template_id",
                 "label": "template",
-                "options": [template.id],
-                "labels": {str(template.id): "test"},
+                "options": [template_id],
+                "labels": {str(template_id): "test"},
                 "style": "select",
                 "trigger": True,
                 "optional": True
@@ -2383,8 +2125,8 @@ class TestActCL(TestRest):
             {
                 "name": "template_id",
                 "label": "template",
-                "options": [template.id],
-                "labels": {str(template.id): "test"},
+                "options": [template_id],
+                "labels": {str(template_id): "test"},
                 "style": "select",
                 "trigger": True,
                 "optional": True
@@ -2405,7 +2147,7 @@ class TestActCL(TestRest):
         response = self.api.options("/act", json={"act": {
             "person_id": 1,
             "status": "positive",
-            "template_id": template.id
+            "template_id": template_id
         }})
 
         self.assertStatusFields(response, 200, [
@@ -2435,12 +2177,12 @@ class TestActCL(TestRest):
             {
                 "name": "template_id",
                 "label": "template",
-                "options": [template.id],
-                "labels": {str(template.id): "test"},
+                "options": [template_id],
+                "labels": {str(template_id): "test"},
                 "style": "select",
                 "trigger": True,
                 "optional": True,
-                "value": template.id
+                "value": template_id
             },
             {
                 "name": "name",
@@ -2507,8 +2249,7 @@ class TestActRUD(TestRest):
     @unittest.mock.patch("nandyio.people.Person", nandyio.unittest.people.MockPerson)
     @unittest.mock.patch("glob.glob")
     @unittest.mock.patch("klotio.service.open", create=True)
-    @unittest.mock.patch("flask.request")
-    def test_fields(self, mock_request, mock_open, mock_glob):
+    def test_fields(self, mock_open, mock_glob):
 
         def glob(pattern):
 
@@ -2523,9 +2264,17 @@ class TestActRUD(TestRest):
             unittest.mock.mock_open(read_data=yaml.safe_dump({"description": "integrate"})).return_value
         ]
 
-        mock_request.session = self.session
+        @klotio.service.require_session
+        def fields():
 
-        self.assertEqual(service.ActRUD.fields().to_list(), [
+            response = flask.make_response(json.dumps({"fields": service.ActRUD.fields().to_list()}))
+            response.headers.set('Content-Type', 'application/json')
+            response.status_code = 200
+            return response
+
+        self.app.add_url_rule('/fields/actrud', 'fields', fields)
+
+        self.assertEqual(self.api.get('/fields/actrud').json["fields"], [
             {
                 "name": "id",
                 "readonly": True
@@ -2542,8 +2291,8 @@ class TestActRUD(TestRest):
                     2
                 ],
                 "labels": {
-                    1: "unit",
-                    2: "test"
+                    '1': "unit",
+                    '2': "test"
                 }
             },
             {
@@ -2580,16 +2329,16 @@ class TestActRUD(TestRest):
     @unittest.mock.patch("nandyio.people.Person", nandyio.unittest.people.MockPerson)
     def test_options(self):
 
-        act = self.sample.act("unit", "test", status="positive", data={"a": 1})
+        act_id = self.sample.act("unit", "test", status="positive", data={"a": 1}).id
 
-        response = self.api.options(f"/act/{act.id}")
+        response = self.api.options(f"/act/{act_id}")
 
         self.assertStatusFields(response, 200, [
             {
                 "name": "id",
                 "readonly": True,
-                "value": act.id,
-                "original": act.id
+                "value": act_id,
+                "original": act_id
             },
             {
                 "name": "person_id",
@@ -2644,7 +2393,7 @@ class TestActRUD(TestRest):
             }
         ])
 
-        response = self.api.options(f"/act/{act.id}", json={"act": {
+        response = self.api.options(f"/act/{act_id}", json={"act": {
             "nope": "bad"
         }})
 
@@ -2652,8 +2401,8 @@ class TestActRUD(TestRest):
             {
                 "name": "id",
                 "readonly": True,
-                "value": act.id,
-                "original": act.id
+                "value": act_id,
+                "original": act_id
             },
             {
                 "name": "person_id",
@@ -2709,7 +2458,7 @@ class TestActRUD(TestRest):
             "unknown field 'nope'"
         ])
 
-        response = self.api.options(f"/act/{act.id}", json={"act": {
+        response = self.api.options(f"/act/{act_id}", json={"act": {
             "person_id": 2,
             "name": "yup",
             "status": "negative",
@@ -2720,8 +2469,8 @@ class TestActRUD(TestRest):
             {
                 "name": "id",
                 "readonly": True,
-                "value": act.id,
-                "original": act.id
+                "value": act_id,
+                "original": act_id
             },
             {
                 "name": "person_id",
@@ -2778,32 +2527,32 @@ class TestActRUD(TestRest):
 
     def test_get(self):
 
-        act = self.sample.act("unit", "test")
+        act_id = self.sample.act("unit", "test").id
 
-        self.assertStatusModel(self.api.get(f"/act/{act.id}"), 200, "act", {
+        self.assertStatusModel(self.api.get(f"/act/{act_id}"), 200, "act", {
             "name": "test"
         })
 
     def test_patch(self):
 
-        act = self.sample.act("unit", "test")
+        act_id = self.sample.act("unit", "test").id
 
-        self.assertStatusValue(self.api.patch(f"/act/{act.id}", json={
+        self.assertStatusValue(self.api.patch(f"/act/{act_id}", json={
             "act": {
                 "status": "negative"
             }
         }), 202, "updated", 1)
 
-        self.assertStatusModel(self.api.get(f"/act/{act.id}"), 200, "act", {
+        self.assertStatusModel(self.api.get(f"/act/{act_id}"), 200, "act", {
             "name": "test",
             "status": "negative"
         })
 
     def test_delete(self):
 
-        act = self.sample.act("unit", "test")
+        act_id = self.sample.act("unit", "test").id
 
-        self.assertStatusValue(self.api.delete(f"/act/{act.id}"), 202, "deleted", 1)
+        self.assertStatusValue(self.api.delete(f"/act/{act_id}"), 202, "deleted", 1)
 
         self.assertStatusModels(self.api.get("/act"), 200, "acts", [])
 
@@ -2818,7 +2567,7 @@ class TestActA(TestRest):
         # wrong
 
         self.assertStatusValue(self.api.patch(f"/act/{model.id}/wrong"), 202, "updated", True)
-        item = self.session.query(mysql.Act).get(model.id)
+        item = self.session.query(models.Act).get(model.id)
         self.session.commit()
         self.assertEqual(item.status, "negative")
         self.assertStatusValue(self.api.patch(f"/act/{model.id}/wrong"), 202, "updated", False)
@@ -2826,7 +2575,7 @@ class TestActA(TestRest):
         # right
 
         self.assertStatusValue(self.api.patch(f"/act/{model.id}/right"), 202, "updated", True)
-        item = self.session.query(mysql.Act).get(model.id)
+        item = self.session.query(models.Act).get(model.id)
         self.session.commit()
         self.assertEqual(item.status, "positive")
         self.assertStatusValue(self.api.patch(f"/act/{model.id}/right"), 202, "updated", False)
@@ -2834,149 +2583,21 @@ class TestActA(TestRest):
 class TestToDo(TestRest):
 
     @unittest.mock.patch("nandyio.people.Person", nandyio.unittest.people.MockPerson)
-    @unittest.mock.patch("flask.request")
-    def test_validate(self, mock_request):
-
-        mock_request.session = self.session
-
-        template = self.sample.template("test", "todo", {"a": 1})
-
-        fields = service.ToDoCL.fields()
-
-        self.assertFalse(service.ToDo.validate(fields))
-
-        self.assertFields(fields, [
-            {
-                "name": "person_id",
-                "label": "person",
-                "style": "radios",
-                "integrate": {
-                    "url": "http://api.people-nandy-io/integrate"
-                },
-                "options": [
-                    1,
-                    2
-                ],
-                "labels": {
-                    1: "unit",
-                    2: "test"
-                },
-                "errors": ["missing value"]
-            },
-            {
-                "name": "status",
-                "options": ['opened', 'closed'],
-                "style": "radios",
-                "errors": ["missing value"]
-            },
-            {
-                "name": "template_id",
-                "label": "template",
-                "options": [template.id],
-                "labels": {template.id: "test"},
-                "style": "select",
-                "trigger": True,
-                "optional": True
-            },
-            {
-                "name": "name",
-                "errors": ["missing value"]
-            },
-            {
-                "name": "yaml",
-                "style": "textarea",
-                "optional": True
-            }
-        ])
-
-        self.assertEqual(fields.errors, [])
-
-        fields = service.ToDoCL.fields(values={"yaml": "a:1"})
-
-        self.assertFalse(service.ToDo.validate(fields))
-
-        self.assertEqual(fields["yaml"].errors, ["must be dict"])
-
-        fields = service.ToDoRUD.fields()
-
-        self.assertFalse(service.ToDo.validate(fields))
-
-        self.assertFields(fields, [
-            {
-                "name": "id",
-                "readonly": True
-            },
-            {
-                "name": "person_id",
-                "label": "person",
-                "style": "radios",
-                "integrate": {
-                    "url": "http://api.people-nandy-io/integrate"
-                },
-                "options": [
-                    1,
-                    2
-                ],
-                "labels": {
-                    1: "unit",
-                    2: "test"
-                },
-                "errors": ["missing value"]
-            },
-            {
-                "name": "status",
-                "options": ['opened', 'closed'],
-                "style": "radios",
-                "errors": ["missing value"]
-            },
-            {
-                "name": "name",
-                "errors": ["missing value"]
-            },
-            {
-                "name": "created",
-                "style": "datetime",
-                "readonly": True
-            },
-            {
-                "name": "updated",
-                "style": "datetime",
-                "readonly": True
-            },
-            {
-                "name": "yaml",
-                "style": "textarea",
-                "optional": True
-            }
-        ])
-
-        self.assertEqual(fields.errors, [])
-
-        fields = service.ToDoRUD.fields(values={"yaml": "a:1"})
-
-        self.assertFalse(service.ToDo.validate(fields))
-
-        self.assertEqual(fields["yaml"].errors, ["must be dict"])
-
-    @unittest.mock.patch("flask.request")
-    def test_retrieve(self, mock_request):
-
-        mock_request.session = self.session
-
-        todo = self.sample.todo("unit", "test")
-
-        self.assertEqual(service.ToDo.retrieve(todo.id).name, "test")
-
-    @unittest.mock.patch("nandyio.people.Person", nandyio.unittest.people.MockPerson)
-    @unittest.mock.patch("flask.request")
     @unittest.mock.patch("service.time.time", unittest.mock.MagicMock(return_value=7))
-    def test_build(self, mock_request):
+    def test_build(self):
 
-        mock_request.session = self.session
+        @klotio.service.require_session
+        def build():
+            response = flask.make_response(json.dumps({"build": service.ToDo.build(**flask.request.json)}))
+            response.headers.set('Content-Type', 'application/json')
+            response.status_code = 200
+            return response
+
+        self.app.add_url_rule('/build/todo', 'build', build)
 
         # basic
 
-        self.assertEqual(service.ToDo.build(**{
+        self.assertStatusValue(self.api.get("/build/todo", json={
             "template_id": 0,
             "data": {
                 "by": "data",
@@ -2986,7 +2607,7 @@ class TestToDo(TestRest):
                 "created": 1,
                 "updated": 2
             }
-        }), {
+        }), 200, "build", {
             "person_id": 1,
             "name": "hey",
             "status": "opened",
@@ -3004,14 +2625,14 @@ class TestToDo(TestRest):
 
         # template by data, person by name
 
-        self.assertEqual(service.ToDo.build(**{
+        self.assertStatusValue(self.api.get("/build/todo", json={
             "template": {
                 "by": "template",
                 "name": "hey",
                 "person": "nope"
             },
             "person": "unit"
-        }), {
+        }), 200, "build", {
             "name": "hey",
             "person_id": 1,
             "data": {
@@ -3023,16 +2644,16 @@ class TestToDo(TestRest):
 
         # template by id, person by name in template
 
-        template = self.sample.template("unit", "todo", data={
+        template_id = self.sample.template("unit", "todo", data={
             "by": "template_id",
             "status": "closed",
             "person": "unit"
-        })
+        }).id
 
-        self.assertEqual(service.ToDo.build(**{
+        self.assertStatusValue(self.api.get("/build/todo", json={
             "name": "hey",
-            "template_id": template.id
-        }), {
+            "template_id": template_id
+        }), 200, "build", {
             "name": "hey",
             "person_id": 1,
             "status": "closed",
@@ -3046,10 +2667,10 @@ class TestToDo(TestRest):
 
         # template by name
 
-        self.assertEqual(service.ToDo.build(**{
+        self.assertStatusValue(self.api.get("/build/todo", json={
             "name": "hey",
             "template": "unit"
-        }), {
+        }), 200, "build", {
             "name": "hey",
             "person_id": 1,
             "status": "closed",
@@ -3081,21 +2702,32 @@ class TestToDo(TestRest):
         })
 
     @unittest.mock.patch("nandyio.people.Person", nandyio.unittest.people.MockPerson)
-    @unittest.mock.patch("flask.request")
     @unittest.mock.patch("service.time.time", unittest.mock.MagicMock(return_value=7))
     @unittest.mock.patch("klotio.service.notify")
-    def test_create(self, mock_notify, mock_request):
+    def test_create(self, mock_notify):
 
-        mock_request.session = self.session
+        @klotio.service.require_session
+        def create():
+            item = service.ToDo.create(**flask.request.json)
+            flask.request.session.commit()
+            response = flask.make_response(json.dumps({"create": item.id}))
+            response.headers.set('Content-Type', 'application/json')
+            response.status_code = 200
+            return response
 
-        model = service.ToDo.create(**{
+        self.app.add_url_rule('/create/todo', 'create', create)
+
+        todo_id = self.api.get("/create/todo", json={
             "person_id": 1,
             "name": "unit",
             "created": 6,
             "data": {
                 "text": "hey"
             }
-        })
+        }).json["create"]
+
+        model = self.session.query(models.ToDo).get(todo_id)
+        self.session.commit()
 
         self.assertEqual(model.person_id, 1)
         self.assertEqual(model.name, "unit")
@@ -3107,10 +2739,6 @@ class TestToDo(TestRest):
             "notified": 7
         })
 
-        item = self.session.query(mysql.ToDo).get(model.id)
-        flask.request.session.commit()
-        self.assertEqual(item.name, "unit")
-
         mock_notify.assert_called_once_with({
             "kind": "todo",
             "action": "create",
@@ -3119,27 +2747,38 @@ class TestToDo(TestRest):
         })
 
     @unittest.mock.patch("nandyio.people.Person", nandyio.unittest.people.MockPerson)
-    @unittest.mock.patch("flask.request")
     @unittest.mock.patch("service.time.time", unittest.mock.MagicMock(return_value=7))
     @unittest.mock.patch("klotio.service.notify")
-    def test_todos(self, mock_notify, mock_request):
-
-        mock_request.session = self.session
+    def test_todos(self, mock_notify):
 
         self.sample.todo("unit", status="closed")
         self.sample.todo("test")
 
-        self.assertFalse(service.ToDo.todos({
+        @klotio.service.require_session
+        def todos():
+            response = flask.make_response(json.dumps({"todos": service.ToDo.todos(flask.request.json["todos"])}))
+            flask.request.session.commit()
+            response.headers.set('Content-Type', 'application/json')
+            response.status_code = 200
+            return response
+
+        self.app.add_url_rule('/todos/todo', 'todos', todos)
+
+        self.assertFalse(self.api.get("/todos/todo", json={"todos": {
             "person": "unit"
-        }))
+        }}).json["todos"])
+
         mock_notify.assert_not_called()
 
-        todo = self.sample.todo("unit")
+        todo_id = self.sample.todo("unit").id
 
-        self.assertTrue(service.ToDo.todos({
+        self.assertTrue(self.api.get("/todos/todo", json={"todos": {
             "person": "unit"
-        }))
-        item = self.session.query(mysql.ToDo).get(todo.id)
+        }}).json["todos"])
+
+        item = self.session.query(models.ToDo).get(todo_id)
+        self.session.commit()
+
         self.assertEqual(item.updated, 7)
         self.assertEqual(item.data["notified"], 7)
         mock_notify.assert_called_once_with({
@@ -3147,21 +2786,21 @@ class TestToDo(TestRest):
             "action": "remind",
             "person": nandyio.unittest.people.MockPerson.model(name="unit"),
             "chore-speech.nandy.io": {},
-            "todos": service.ToDo.responses([todo])
+            "todos": service.ToDo.responses([item])
         })
 
-        self.assertTrue(service.ToDo.todos({
+        self.assertTrue(self.api.get("/todos/todo", json={"todos": {
             "person_id": 1,
             "chore-speech.nandy.io": {
                 "language": "cursing"
             }
-        }))
+        }}).json["todos"])
         mock_notify.assert_called_with({
             "kind": "todos",
             "action": "remind",
             "person": nandyio.unittest.people.MockPerson.model(name="unit"),
             "chore-speech.nandy.io": {"language": "cursing"},
-            "todos": service.ToDo.responses([todo])
+            "todos": service.ToDo.responses([item])
         })
 
     @unittest.mock.patch("service.time.time", unittest.mock.MagicMock(return_value=7))
@@ -3244,53 +2883,84 @@ class TestToDo(TestRest):
         mock_notify.assert_called_once()
 
     @unittest.mock.patch("nandyio.people.Person", nandyio.unittest.people.MockPerson)
-    @unittest.mock.patch("flask.request")
     @unittest.mock.patch("service.time.time", unittest.mock.MagicMock(return_value=7))
-    @unittest.mock.patch("service.ToDo.notify")
-    @unittest.mock.patch("klotio.service.notify", unittest.mock.MagicMock())
-    def test_complete(self, mock_notify, mock_request):
+    @unittest.mock.patch("klotio.service.notify")
+    def test_complete(self, mock_notify):
 
-        mock_request.session = self.session
+        area_id = self.sample.area("unit", "test", status="negative").id
 
-        area = self.sample.area("unit", "test", status="negative")
-
-        todo = self.sample.todo("unit", "hey", data={
+        todo_id = self.sample.todo("unit", "hey", data={
             "text": "hey",
-            "area": area.id,
+            "area": area_id,
             "act": {
                 "name": "Unit",
                 "text": "test"
             }
-        })
+        }).id
 
-        self.assertTrue(service.ToDo.complete(todo))
+        @klotio.service.require_session
+        def complete():
+            todo = self.session.query(models.ToDo).get(flask.request.json["complete"])
+            response = flask.make_response(json.dumps({"complete": service.ToDo.complete(todo)}))
+            flask.request.session.commit()
+            response.headers.set('Content-Type', 'application/json')
+            response.status_code = 200
+            return response
+
+        self.app.add_url_rule('/complete/todo', 'complete', complete)
+
+        self.assertTrue(self.api.get("/complete/todo", json={"complete": todo_id}).json["complete"])
+
+        todo = self.session.query(models.ToDo).get(todo_id)
+
         self.assertEqual(todo.status, "closed")
         self.assertTrue(todo.data["end"], 7)
 
-        item = self.session.query(mysql.Area).get(area.id)
-        self.assertEqual(item.status, "positive")
-        mock_notify.assert_called_once_with("complete", todo)
+        area = self.session.query(models.Area).get(area_id)
+        self.session.commit()
+        self.assertEqual(area.status, "positive")
 
-        act = self.session.query(mysql.Act).filter_by(name="Unit").all()[0]
+        act = self.session.query(models.Act).filter_by(name="Unit").all()[0]
         self.assertEqual(act.person_id, todo.person_id)
         self.assertEqual(act.status, "positive")
         self.assertEqual(act.data["text"], "test")
 
-        self.assertFalse(service.ToDo.complete(todo))
-        mock_notify.assert_called_once()
-
-        todo = self.sample.todo("unit", "hey", data={
-            "text": "you",
-            "area": area.id,
-            "act": True,
-            "notified": 7
+        self.assertEqual(mock_notify.call_args_list[0].args[0], {
+            "kind": "todo",
+            "action": "complete",
+            "todo": service.ToDo.response(todo),
+            "person": nandyio.unittest.people.MockPerson.model(name="unit")
+        })
+        self.assertEqual(mock_notify.call_args_list[1].args[0], {
+            "kind": "area",
+            "action": "right",
+            "area": service.Area.response(area),
+            "person": nandyio.unittest.people.MockPerson.model(name="unit")
+        })
+        self.assertEqual(mock_notify.call_args_list[2].args[0], {
+            "kind": "act",
+            "action": "create",
+            "act": service.Act.response(act),
+            "person": nandyio.unittest.people.MockPerson.model(name="unit")
         })
 
-        service.ToDo.complete(todo)
+        self.assertFalse(self.api.get("/complete/todo", json={"complete": todo_id}).json["complete"])
+
+        todo_id = self.sample.todo("unit", "hey", data={
+            "text": "you",
+            "act": True,
+            "notified": 7
+        }).id
+
+        self.api.get("/complete/todo", json={"complete": todo_id})
+
+        todo = self.session.query(models.ToDo).get(todo_id)
+        self.session.commit()
+
         self.assertEqual(todo.status, "closed")
         self.assertTrue(todo.data["end"], 7)
 
-        act = self.session.query(mysql.Act).filter_by(name="hey").all()[0]
+        act = self.session.query(models.Act).filter_by(name="hey").all()[0]
         self.assertEqual(act.person_id, todo.person_id)
         self.assertEqual(act.status, "positive")
         self.assertEqual(act.data["text"], "you")
@@ -3354,8 +3024,7 @@ class TestToDoCL(TestRest):
     @unittest.mock.patch("glob.glob")
     @unittest.mock.patch("service.open", create=True)
     @unittest.mock.patch("klotio.service.open", create=True)
-    @unittest.mock.patch("flask.request")
-    def test_fields(self, mock_request, mock_klotio_open, mock_open, mock_glob):
+    def test_fields(self, mock_klotio_open, mock_open, mock_glob):
 
         def glob(pattern):
 
@@ -3375,11 +3044,19 @@ class TestToDoCL(TestRest):
             unittest.mock.mock_open(read_data=yaml.safe_dump({"description": "integrate"})).return_value
         ]
 
-        mock_request.session = self.session
+        template_id = self.sample.template("test", "todo", {"a": 1}).id
 
-        template = self.sample.template("test", "todo", {"a": 1})
+        @klotio.service.require_session
+        def blank_fields():
 
-        self.assertEqual(service.ToDoCL.fields().to_list(), [
+            response = flask.make_response(json.dumps({"fields": service.ToDoCL.fields().to_list()}))
+            response.headers.set('Content-Type', 'application/json')
+            response.status_code = 200
+            return response
+
+        self.app.add_url_rule('/blank_fields/todocl', 'blank_fields', blank_fields)
+
+        self.assertEqual(self.api.get('/blank_fields/todocl').json["fields"], [
             {
                 "name": "person_id",
                 "label": "person",
@@ -3392,8 +3069,8 @@ class TestToDoCL(TestRest):
                     2
                 ],
                 "labels": {
-                    1: "unit",
-                    2: "test"
+                    '1': "unit",
+                    '2': "test"
                 }
             },
             {
@@ -3404,8 +3081,8 @@ class TestToDoCL(TestRest):
             {
                 "name": "template_id",
                 "label": "template",
-                "options": [template.id],
-                "labels": {template.id: "test"},
+                "options": [template_id],
+                "labels": {str(template_id): "test"},
                 "style": "select",
                 "trigger": True,
                 "optional": True
@@ -3426,7 +3103,17 @@ class TestToDoCL(TestRest):
 
         mock_klotio_open.assert_called_once_with("/opt/service/config/integration_unit.test_todo.fields.yaml", "r")
 
-        self.assertEqual(service.ToDoCL.fields({"template_id": template.id}).to_list(), [
+        @klotio.service.require_session
+        def template_fields():
+
+            response = flask.make_response(json.dumps({"fields": service.ToDoCL.fields({"template_id": template_id}).to_list()}))
+            response.headers.set('Content-Type', 'application/json')
+            response.status_code = 200
+            return response
+
+        self.app.add_url_rule('/template_fields/todocl', 'template_fields', template_fields)
+
+        self.assertEqual(self.api.get('/template_fields/todocl').json["fields"], [
             {
                 "name": "person_id",
                 "label": "person",
@@ -3439,8 +3126,8 @@ class TestToDoCL(TestRest):
                     2
                 ],
                 "labels": {
-                    1: "unit",
-                    2: "test"
+                    '1': "unit",
+                    '2': "test"
                 }
             },
             {
@@ -3451,12 +3138,12 @@ class TestToDoCL(TestRest):
             {
                 "name": "template_id",
                 "label": "template",
-                "options": [template.id],
-                "labels": {template.id: "test"},
+                "options": [template_id],
+                "labels": {str(template_id): "test"},
                 "style": "select",
                 "trigger": True,
                 "optional": True,
-                "value": template.id
+                "value": template_id
             },
             {
                 "name": "name",
@@ -3479,7 +3166,7 @@ class TestToDoCL(TestRest):
     @unittest.mock.patch("nandyio.people.Person", nandyio.unittest.people.MockPerson)
     def test_options(self):
 
-        template = self.sample.template("test", "todo", {"a": 1})
+        template_id = self.sample.template("test", "todo", {"a": 1}).id
 
         response = self.api.options("/todo")
 
@@ -3508,8 +3195,8 @@ class TestToDoCL(TestRest):
             {
                 "name": "template_id",
                 "label": "template",
-                "options": [template.id],
-                "labels": {str(template.id): "test"},
+                "options": [template_id],
+                "labels": {str(template_id): "test"},
                 "style": "select",
                 "trigger": True,
                 "optional": True
@@ -3555,8 +3242,8 @@ class TestToDoCL(TestRest):
             {
                 "name": "template_id",
                 "label": "template",
-                "options": [template.id],
-                "labels": {str(template.id): "test"},
+                "options": [template_id],
+                "labels": {str(template_id): "test"},
                 "style": "select",
                 "trigger": True,
                 "optional": True
@@ -3577,7 +3264,7 @@ class TestToDoCL(TestRest):
         response = self.api.options("/todo", json={"todo": {
             "person_id": 1,
             "status": "opened",
-            "template_id": template.id
+            "template_id": template_id
         }})
 
         self.assertStatusFields(response, 200, [
@@ -3607,12 +3294,12 @@ class TestToDoCL(TestRest):
             {
                 "name": "template_id",
                 "label": "template",
-                "options": [template.id],
-                "labels": {str(template.id): "test"},
+                "options": [template_id],
+                "labels": {str(template_id): "test"},
                 "style": "select",
                 "trigger": True,
                 "optional": True,
-                "value": template.id
+                "value": template_id
             },
             {
                 "name": "name",
@@ -3679,16 +3366,16 @@ class TestToDoCL(TestRest):
     @unittest.mock.patch("klotio.service.notify", unittest.mock.MagicMock)
     def test_patch(self):
 
-        todo = self.sample.todo("unit", "hey", data={
+        todo_id = self.sample.todo("unit", "hey", data={
             "text": "hey"
-        })
+        }).id
 
         self.assertStatusValue(self.api.patch(f"/todo", json={
             "todos": {
                 "person": "unit"
             }
         }), 202, "updated", True)
-        item = self.session.query(mysql.ToDo).get(todo.id)
+        item = self.session.query(models.ToDo).get(todo_id)
         self.session.commit()
         self.assertEqual(item.data["notified"], 7)
 
@@ -3697,8 +3384,7 @@ class TestToDoRUD(TestRest):
     @unittest.mock.patch("nandyio.people.Person", nandyio.unittest.people.MockPerson)
     @unittest.mock.patch("glob.glob")
     @unittest.mock.patch("klotio.service.open", create=True)
-    @unittest.mock.patch("flask.request")
-    def test_fields(self, mock_request, mock_open, mock_glob):
+    def test_fields(self, mock_open, mock_glob):
 
         def glob(pattern):
 
@@ -3713,9 +3399,17 @@ class TestToDoRUD(TestRest):
             unittest.mock.mock_open(read_data=yaml.safe_dump({"description": "integrate"})).return_value
         ]
 
-        mock_request.session = self.session
+        @klotio.service.require_session
+        def fields():
 
-        self.assertEqual(service.ToDoRUD.fields().to_list(), [
+            response = flask.make_response(json.dumps({"fields": service.ToDoRUD.fields().to_list()}))
+            response.headers.set('Content-Type', 'application/json')
+            response.status_code = 200
+            return response
+
+        self.app.add_url_rule('/fields/todorud', 'fields', fields)
+
+        self.assertEqual(self.api.get('/fields/todorud').json["fields"], [
             {
                 "name": "id",
                 "readonly": True
@@ -3732,8 +3426,8 @@ class TestToDoRUD(TestRest):
                     2
                 ],
                 "labels": {
-                    1: "unit",
-                    2: "test"
+                    '1': "unit",
+                    '2': "test"
                 }
             },
             {
@@ -3770,16 +3464,16 @@ class TestToDoRUD(TestRest):
     @unittest.mock.patch("nandyio.people.Person", nandyio.unittest.people.MockPerson)
     def test_options(self):
 
-        todo = self.sample.todo("unit", "test", status="opened", data={"text": 1})
+        todo_id = self.sample.todo("unit", "test", status="opened", data={"text": 1}).id
 
-        response = self.api.options(f"/todo/{todo.id}")
+        response = self.api.options(f"/todo/{todo_id}")
 
         self.assertStatusFields(response, 200, [
             {
                 "name": "id",
                 "readonly": True,
-                "value": todo.id,
-                "original": todo.id
+                "value": todo_id,
+                "original": todo_id
             },
             {
                 "name": "person_id",
@@ -3834,7 +3528,7 @@ class TestToDoRUD(TestRest):
             }
         ])
 
-        response = self.api.options(f"/todo/{todo.id}", json={"todo": {
+        response = self.api.options(f"/todo/{todo_id}", json={"todo": {
             "nope": "bad"
         }})
 
@@ -3842,8 +3536,8 @@ class TestToDoRUD(TestRest):
             {
                 "name": "id",
                 "readonly": True,
-                "value": todo.id,
-                "original": todo.id
+                "value": todo_id,
+                "original": todo_id
             },
             {
                 "name": "person_id",
@@ -3899,7 +3593,7 @@ class TestToDoRUD(TestRest):
             "unknown field 'nope'"
         ])
 
-        response = self.api.options(f"/todo/{todo.id}", json={"todo": {
+        response = self.api.options(f"/todo/{todo_id}", json={"todo": {
             "person_id": 2,
             "name": "yup",
             "status": "closed",
@@ -3910,8 +3604,8 @@ class TestToDoRUD(TestRest):
             {
                 "name": "id",
                 "readonly": True,
-                "value": todo.id,
-                "original": todo.id
+                "value": todo_id,
+                "original": todo_id
             },
             {
                 "name": "person_id",
@@ -3968,32 +3662,32 @@ class TestToDoRUD(TestRest):
 
     def test_get(self):
 
-        todo = self.sample.todo("unit", "test")
+        todo_id = self.sample.todo("unit", "test").id
 
-        self.assertStatusModel(self.api.get(f"/todo/{todo.id}"), 200, "todo", {
+        self.assertStatusModel(self.api.get(f"/todo/{todo_id}"), 200, "todo", {
             "name": "test"
         })
 
     def test_patch(self):
 
-        todo = self.sample.todo("unit", "test")
+        todo_id = self.sample.todo("unit", "test").id
 
-        self.assertStatusValue(self.api.patch(f"/todo/{todo.id}", json={
+        self.assertStatusValue(self.api.patch(f"/todo/{todo_id}", json={
             "todo": {
                 "status": "closed"
             }
         }), 202, "updated", 1)
 
-        self.assertStatusModel(self.api.get(f"/todo/{todo.id}"), 200, "todo", {
+        self.assertStatusModel(self.api.get(f"/todo/{todo_id}"), 200, "todo", {
             "name": "test",
             "status": "closed"
         })
 
     def test_delete(self):
 
-        todo = self.sample.todo("unit", "test")
+        todo_id = self.sample.todo("unit", "test").id
 
-        self.assertStatusValue(self.api.delete(f"/todo/{todo.id}"), 202, "deleted", 1)
+        self.assertStatusValue(self.api.delete(f"/todo/{todo_id}"), 202, "deleted", 1)
 
         self.assertStatusModels(self.api.get("/todo"), 200, "areas", [])
 
@@ -4010,14 +3704,14 @@ class TestToDoA(TestRest):
         # remind
 
         self.assertStatusValue(self.api.patch(f"/todo/{todo.id}/remind"), 202, "updated", True)
-        item = self.session.query(mysql.ToDo).get(todo.id)
+        item = self.session.query(models.ToDo).get(todo.id)
         self.session.commit()
         self.assertEqual(item.data["notified"], 7)
 
         # pause
 
         self.assertStatusValue(self.api.patch(f"/todo/{todo.id}/pause"), 202, "updated", True)
-        item = self.session.query(mysql.ToDo).get(todo.id)
+        item = self.session.query(models.ToDo).get(todo.id)
         self.session.commit()
         self.assertTrue(item.data["paused"])
         self.assertStatusValue(self.api.patch(f"/todo/{todo.id}/pause"), 202, "updated", False)
@@ -4025,7 +3719,7 @@ class TestToDoA(TestRest):
         # unpause
 
         self.assertStatusValue(self.api.patch(f"/todo/{todo.id}/unpause"), 202, "updated", True)
-        item = self.session.query(mysql.ToDo).get(todo.id)
+        item = self.session.query(models.ToDo).get(todo.id)
         self.session.commit()
         self.assertFalse(item.data["paused"])
         self.assertStatusValue(self.api.patch(f"/todo/{todo.id}/unpause"), 202, "updated", False)
@@ -4033,7 +3727,7 @@ class TestToDoA(TestRest):
         # skip
 
         self.assertStatusValue(self.api.patch(f"/todo/{todo.id}/skip"), 202, "updated", True)
-        item = self.session.query(mysql.ToDo).get(todo.id)
+        item = self.session.query(models.ToDo).get(todo.id)
         self.session.commit()
         self.assertTrue(item.data["skipped"])
         self.assertStatusValue(self.api.patch(f"/todo/{todo.id}/skip"), 202, "updated", False)
@@ -4041,7 +3735,7 @@ class TestToDoA(TestRest):
         # unskip
 
         self.assertStatusValue(self.api.patch(f"/todo/{todo.id}/unskip"), 202, "updated", True)
-        item = self.session.query(mysql.ToDo).get(todo.id)
+        item = self.session.query(models.ToDo).get(todo.id)
         self.session.commit()
         self.assertFalse(item.data["skipped"])
         self.assertStatusValue(self.api.patch(f"/todo/{todo.id}/unskip"), 202, "updated", False)
@@ -4049,7 +3743,7 @@ class TestToDoA(TestRest):
         # complete
 
         self.assertStatusValue(self.api.patch(f"/todo/{todo.id}/complete"), 202, "updated", True)
-        item = self.session.query(mysql.ToDo).get(todo.id)
+        item = self.session.query(models.ToDo).get(todo.id)
         self.session.commit()
         self.assertEqual(item.status, "closed")
         self.assertStatusValue(self.api.patch(f"/todo/{todo.id}/complete"), 202, "updated", False)
@@ -4057,7 +3751,7 @@ class TestToDoA(TestRest):
         # uncomplete
 
         self.assertStatusValue(self.api.patch(f"/todo/{todo.id}/uncomplete"), 202, "updated", True)
-        item = self.session.query(mysql.ToDo).get(todo.id)
+        item = self.session.query(models.ToDo).get(todo.id)
         self.session.commit()
         self.assertEqual(item.status, "opened")
         self.assertStatusValue(self.api.patch(f"/todo/{todo.id}/uncomplete"), 202, "updated", False)
@@ -4065,7 +3759,7 @@ class TestToDoA(TestRest):
         # expire
 
         self.assertStatusValue(self.api.patch(f"/todo/{todo.id}/expire"), 202, "updated", True)
-        item = self.session.query(mysql.ToDo).get(todo.id)
+        item = self.session.query(models.ToDo).get(todo.id)
         self.session.commit()
         self.assertTrue(item.data["expired"])
         self.assertStatusValue(self.api.patch(f"/todo/{todo.id}/expire"), 202, "updated", False)
@@ -4073,7 +3767,7 @@ class TestToDoA(TestRest):
         # unexpire
 
         self.assertStatusValue(self.api.patch(f"/todo/{todo.id}/unexpire"), 202, "updated", True)
-        item = self.session.query(mysql.ToDo).get(todo.id)
+        item = self.session.query(models.ToDo).get(todo.id)
         self.session.commit()
         self.assertFalse(item.data["expired"])
         self.assertStatusValue(self.api.patch(f"/todo/{todo.id}/unexpire"), 202, "updated", False)
@@ -4081,149 +3775,21 @@ class TestToDoA(TestRest):
 class TestRoutine(TestRest):
 
     @unittest.mock.patch("nandyio.people.Person", nandyio.unittest.people.MockPerson)
-    @unittest.mock.patch("flask.request")
-    def test_validate(self, mock_request):
-
-        mock_request.session = self.session
-
-        template = self.sample.template("test", "routine", {"a": 1})
-
-        fields = service.RoutineCL.fields()
-
-        self.assertFalse(service.Routine.validate(fields))
-
-        self.assertFields(fields, [
-            {
-                "name": "person_id",
-                "label": "person",
-                "style": "radios",
-                "integrate": {
-                    "url": "http://api.people-nandy-io/integrate"
-                },
-                "options": [
-                    1,
-                    2
-                ],
-                "labels": {
-                    1: "unit",
-                    2: "test"
-                },
-                "errors": ["missing value"]
-            },
-            {
-                "name": "status",
-                "options": ['opened', 'closed'],
-                "style": "radios",
-                "errors": ["missing value"]
-            },
-            {
-                "name": "template_id",
-                "label": "template",
-                "options": [template.id],
-                "labels": {template.id: "test"},
-                "style": "select",
-                "trigger": True,
-                "optional": True
-            },
-            {
-                "name": "name",
-                "errors": ["missing value"]
-            },
-            {
-                "name": "yaml",
-                "style": "textarea",
-                "optional": True
-            }
-        ])
-
-        self.assertEqual(fields.errors, [])
-
-        fields = service.RoutineCL.fields(values={"yaml": "a:1"})
-
-        self.assertFalse(service.Routine.validate(fields))
-
-        self.assertEqual(fields["yaml"].errors, ["must be dict"])
-
-        fields = service.RoutineRUD.fields()
-
-        self.assertFalse(service.Routine.validate(fields))
-
-        self.assertFields(fields, [
-            {
-                "name": "id",
-                "readonly": True
-            },
-            {
-                "name": "person_id",
-                "label": "person",
-                "style": "radios",
-                "integrate": {
-                    "url": "http://api.people-nandy-io/integrate"
-                },
-                "options": [
-                    1,
-                    2
-                ],
-                "labels": {
-                    1: "unit",
-                    2: "test"
-                },
-                "errors": ["missing value"]
-            },
-            {
-                "name": "status",
-                "options": ['opened', 'closed'],
-                "style": "radios",
-                "errors": ["missing value"]
-            },
-            {
-                "name": "name",
-                "errors": ["missing value"]
-            },
-            {
-                "name": "created",
-                "style": "datetime",
-                "readonly": True
-            },
-            {
-                "name": "updated",
-                "style": "datetime",
-                "readonly": True
-            },
-            {
-                "name": "yaml",
-                "style": "textarea",
-                "optional": True
-            }
-        ])
-
-        self.assertEqual(fields.errors, [])
-
-        fields = service.RoutineRUD.fields(values={"yaml": "a:1"})
-
-        self.assertFalse(service.Routine.validate(fields))
-
-        self.assertEqual(fields["yaml"].errors, ["must be dict"])
-
-    @unittest.mock.patch("flask.request")
-    def test_retrieve(self, mock_request):
-
-        mock_request.session = self.session
-
-        routine = self.sample.routine("test", "unit")
-
-        self.assertEqual(service.Routine.retrieve(routine.id).name, "unit")
-
-    @unittest.mock.patch("nandyio.people.Person", nandyio.unittest.people.MockPerson)
-    @unittest.mock.patch("flask.request")
     @unittest.mock.patch("service.time.time", unittest.mock.MagicMock(return_value=7))
-    def test_build(self, mock_request):
+    def test_build(self):
 
-        mock_request.session = self.session
+        @klotio.service.require_session
+        def build():
+            response = flask.make_response(json.dumps({"build": service.Routine.build(**flask.request.json)}))
+            response.headers.set('Content-Type', 'application/json')
+            response.status_code = 200
+            return response
+
+        self.app.add_url_rule('/build/routine', 'build', build)
 
         # basic
 
-        self.assertEqual(service.Routine.build(**{
+        self.assertStatusValue(self.api.get("/build/routine", json={
             "template_id": 0,
             "data": {
                 "by": "data",
@@ -4233,7 +3799,7 @@ class TestRoutine(TestRest):
                 "created": 1,
                 "updated": 2
             }
-        }), {
+        }), 200, "build", {
             "person_id": 1,
             "name": "hey",
             "status": "opened",
@@ -4251,14 +3817,14 @@ class TestRoutine(TestRest):
 
         # template by data, person by name
 
-        self.assertEqual(service.Routine.build(**{
+        self.assertStatusValue(self.api.get("/build/routine", json={
             "template": {
                 "by": "template",
                 "name": "hey",
                 "person": "nope"
             },
             "person": "unit"
-        }), {
+        }), 200, "build", {
             "name": "hey",
             "person_id": 1,
             "data": {
@@ -4270,16 +3836,16 @@ class TestRoutine(TestRest):
 
         # template by id, person by name in template
 
-        template = self.sample.template("unit", "routine", data={
+        template_id = self.sample.template("unit", "routine", data={
             "by": "template_id",
             "status": "closed",
             "person": "unit"
-        })
+        }).id
 
-        self.assertEqual(service.Routine.build(**{
+        self.assertStatusValue(self.api.get("/build/routine", json={
             "name": "hey",
-            "template_id": template.id
-        }), {
+            "template_id": template_id
+        }), 200, "build", {
             "name": "hey",
             "person_id": 1,
             "status": "closed",
@@ -4293,10 +3859,10 @@ class TestRoutine(TestRest):
 
         # template by name
 
-        self.assertEqual(service.Routine.build(**{
+        self.assertStatusValue(self.api.get("/build/routine", json={
             "name": "hey",
             "template": "unit"
-        }), {
+        }), 200, "build", {
             "name": "hey",
             "person_id": 1,
             "status": "closed",
@@ -4309,19 +3875,23 @@ class TestRoutine(TestRest):
         })
 
     @unittest.mock.patch("nandyio.people.Person", nandyio.unittest.people.MockPerson)
-    @unittest.mock.patch("flask.request")
     @unittest.mock.patch("service.time.time", unittest.mock.MagicMock(return_value=7))
-    def test_tasks(self, mock_request):
-
-        mock_request.session = self.session
+    def test_tasks(self):
 
         todo = self.sample.todo("unit")
         self.sample.todo("unit", status="closed")
         self.sample.todo("test")
 
-        # explicit
+        @klotio.service.require_session
+        def tasks():
+            response = flask.make_response(json.dumps({"tasks": service.Routine.tasks(service.Routine.build(**flask.request.json))}))
+            response.headers.set('Content-Type', 'application/json')
+            response.status_code = 200
+            return response
 
-        self.assertEqual(service.Routine.tasks(service.Routine.build(**{
+        self.app.add_url_rule('/tasks/routine', 'tasks', tasks)
+
+        self.assertStatusValue(self.api.get("/tasks/routine", json={
             "template_id": 0,
             "data": {
                 "by": "data",
@@ -4333,7 +3903,7 @@ class TestRoutine(TestRest):
                 "todos": True,
                 "tasks": [{}]
             }
-        })), {
+        }), 200, "tasks", {
             "person_id": 1,
             "name": "hey",
             "status": "opened",
@@ -4358,65 +3928,6 @@ class TestRoutine(TestRest):
                         "id": 1
                     }
                 ]
-            }
-        })
-
-        # template by data, person by name
-
-        self.assertEqual(service.Routine.build(**{
-            "template": {
-                "by": "template",
-                "name": "hey",
-                "person": "nope"
-            },
-            "person": "unit"
-        }), {
-            "name": "hey",
-            "person_id": 1,
-            "data": {
-                "by": "template",
-                "name": "hey",
-                "person": "nope"
-            }
-        })
-
-        # template by id, person by name in template
-
-        template = self.sample.template("unit", "routine", data={
-            "by": "template_id",
-            "status": "closed",
-            "person": "unit"
-        })
-
-        self.assertEqual(service.Routine.build(**{
-            "name": "hey",
-            "template_id": template.id
-        }), {
-            "name": "hey",
-            "person_id": 1,
-            "status": "closed",
-            "data": {
-                "name": "unit",
-                "person": "unit",
-                "by": "template_id",
-                "status": "closed"
-            }
-        })
-
-        # template by name
-
-        self.assertEqual(service.Routine.build(**{
-            "name": "hey",
-            "template": "unit"
-        }), {
-            "name": "hey",
-            "person_id": 1,
-            "status": "closed",
-            "data": {
-                "name": "unit",
-                "person": "unit",
-                "by": "template_id",
-                "status": "closed"
             }
         })
 
@@ -4505,14 +4016,22 @@ class TestRoutine(TestRest):
         self.assertEqual(routine.status, "closed")
 
     @unittest.mock.patch("nandyio.people.Person", nandyio.unittest.people.MockPerson)
-    @unittest.mock.patch("flask.request")
     @unittest.mock.patch("service.time.time", unittest.mock.MagicMock(return_value=7))
     @unittest.mock.patch("klotio.service.notify", unittest.mock.MagicMock)
-    def test_create(self, mock_request):
+    def test_create(self):
 
-        mock_request.session = self.session
+        @klotio.service.require_session
+        def create():
+            item = service.Routine.create(**flask.request.json)
+            flask.request.session.commit()
+            response = flask.make_response(json.dumps({"create": item.id}))
+            response.headers.set('Content-Type', 'application/json')
+            response.status_code = 200
+            return response
 
-        routine = service.Routine.create(**{
+        self.app.add_url_rule('/create/routine', 'create', create)
+
+        routine_id = self.api.get("/create/routine", json={
             "person_id": 1,
             "name": "unit",
             "status": "opened",
@@ -4521,7 +4040,10 @@ class TestRoutine(TestRest):
                 "text": "hey",
                 "tasks": [{}]
             }
-        })
+        }).json["create"]
+
+        routine = self.session.query(models.Routine).get(routine_id)
+        self.session.commit()
 
         self.assertEqual(routine.person_id, 1)
         self.assertEqual(routine.name, "unit")
@@ -4539,10 +4061,6 @@ class TestRoutine(TestRest):
                     "notified": 7
                 }]
         })
-
-        item = self.session.query(mysql.Routine).get(routine.id)
-        flask.request.session.commit()
-        self.assertEqual(item.name, "unit")
 
     @unittest.mock.patch("nandyio.people.Person", nandyio.unittest.people.MockPerson)
     @unittest.mock.patch("service.time.time", unittest.mock.MagicMock(return_value=7))
@@ -4717,8 +4235,7 @@ class TestRoutineCL(TestRest):
     @unittest.mock.patch("glob.glob")
     @unittest.mock.patch("service.open", create=True)
     @unittest.mock.patch("klotio.service.open", create=True)
-    @unittest.mock.patch("flask.request")
-    def test_fields(self, mock_request, mock_klotio_open, mock_open, mock_glob):
+    def test_fields(self, mock_klotio_open, mock_open, mock_glob):
 
         def glob(pattern):
 
@@ -4738,11 +4255,19 @@ class TestRoutineCL(TestRest):
             unittest.mock.mock_open(read_data=yaml.safe_dump({"description": "integrate"})).return_value
         ]
 
-        mock_request.session = self.session
+        template_id = self.sample.template("test", "routine", {"a": 1}).id
 
-        template = self.sample.template("test", "routine", {"a": 1})
+        @klotio.service.require_session
+        def blank_fields():
 
-        self.assertEqual(service.RoutineCL.fields().to_list(), [
+            response = flask.make_response(json.dumps({"fields": service.RoutineCL.fields().to_list()}))
+            response.headers.set('Content-Type', 'application/json')
+            response.status_code = 200
+            return response
+
+        self.app.add_url_rule('/blank_fields/routinecl', 'blank_fields', blank_fields)
+
+        self.assertEqual(self.api.get('/blank_fields/routinecl').json["fields"], [
             {
                 "name": "person_id",
                 "label": "person",
@@ -4755,8 +4280,8 @@ class TestRoutineCL(TestRest):
                     2
                 ],
                 "labels": {
-                    1: "unit",
-                    2: "test"
+                    '1': "unit",
+                    '2': "test"
                 }
             },
             {
@@ -4767,8 +4292,8 @@ class TestRoutineCL(TestRest):
             {
                 "name": "template_id",
                 "label": "template",
-                "options": [template.id],
-                "labels": {template.id: "test"},
+                "options": [template_id],
+                "labels": {str(template_id): "test"},
                 "style": "select",
                 "trigger": True,
                 "optional": True
@@ -4789,7 +4314,17 @@ class TestRoutineCL(TestRest):
 
         mock_klotio_open.assert_called_once_with("/opt/service/config/integration_unit.test_routine.fields.yaml", "r")
 
-        self.assertEqual(service.RoutineCL.fields({"template_id": template.id}).to_list(), [
+        @klotio.service.require_session
+        def template_fields():
+
+            response = flask.make_response(json.dumps({"fields": service.RoutineCL.fields({"template_id": template_id}).to_list()}))
+            response.headers.set('Content-Type', 'application/json')
+            response.status_code = 200
+            return response
+
+        self.app.add_url_rule('/template_fields/routinecl', 'template_fields', template_fields)
+
+        self.assertEqual(self.api.get('/template_fields/routinecl').json["fields"], [
             {
                 "name": "person_id",
                 "label": "person",
@@ -4802,8 +4337,8 @@ class TestRoutineCL(TestRest):
                     2
                 ],
                 "labels": {
-                    1: "unit",
-                    2: "test"
+                    '1': "unit",
+                    '2': "test"
                 }
             },
             {
@@ -4814,12 +4349,12 @@ class TestRoutineCL(TestRest):
             {
                 "name": "template_id",
                 "label": "template",
-                "options": [template.id],
-                "labels": {template.id: "test"},
+                "options": [template_id],
+                "labels": {str(template_id): "test"},
                 "style": "select",
                 "trigger": True,
                 "optional": True,
-                "value": template.id
+                "value": template_id
             },
             {
                 "name": "name",
@@ -4842,7 +4377,7 @@ class TestRoutineCL(TestRest):
     @unittest.mock.patch("nandyio.people.Person", nandyio.unittest.people.MockPerson)
     def test_options(self):
 
-        template = self.sample.template("test", "routine", {"a": 1})
+        template_id = self.sample.template("test", "routine", {"a": 1}).id
 
         response = self.api.options("/routine")
 
@@ -4871,8 +4406,8 @@ class TestRoutineCL(TestRest):
             {
                 "name": "template_id",
                 "label": "template",
-                "options": [template.id],
-                "labels": {str(template.id): "test"},
+                "options": [template_id],
+                "labels": {str(template_id): "test"},
                 "style": "select",
                 "trigger": True,
                 "optional": True
@@ -4918,8 +4453,8 @@ class TestRoutineCL(TestRest):
             {
                 "name": "template_id",
                 "label": "template",
-                "options": [template.id],
-                "labels": {str(template.id): "test"},
+                "options": [template_id],
+                "labels": {str(template_id): "test"},
                 "style": "select",
                 "trigger": True,
                 "optional": True
@@ -4940,7 +4475,7 @@ class TestRoutineCL(TestRest):
         response = self.api.options("/routine", json={"routine": {
             "person_id": 1,
             "status": "opened",
-            "template_id": template.id
+            "template_id": template_id
         }})
 
         self.assertStatusFields(response, 200, [
@@ -4970,12 +4505,12 @@ class TestRoutineCL(TestRest):
             {
                 "name": "template_id",
                 "label": "template",
-                "options": [template.id],
-                "labels": {str(template.id): "test"},
+                "options": [template_id],
+                "labels": {str(template_id): "test"},
                 "style": "select",
                 "trigger": True,
                 "optional": True,
-                "value": template.id
+                "value": template_id
             },
             {
                 "name": "name",
@@ -5053,8 +4588,7 @@ class TestRoutineRUD(TestRest):
     @unittest.mock.patch("nandyio.people.Person", nandyio.unittest.people.MockPerson)
     @unittest.mock.patch("glob.glob")
     @unittest.mock.patch("klotio.service.open", create=True)
-    @unittest.mock.patch("flask.request")
-    def test_fields(self, mock_request, mock_open, mock_glob):
+    def test_fields(self, mock_open, mock_glob):
 
         def glob(pattern):
 
@@ -5069,9 +4603,17 @@ class TestRoutineRUD(TestRest):
             unittest.mock.mock_open(read_data=yaml.safe_dump({"description": "integrate"})).return_value
         ]
 
-        mock_request.session = self.session
+        @klotio.service.require_session
+        def fields():
 
-        self.assertEqual(service.RoutineRUD.fields().to_list(), [
+            response = flask.make_response(json.dumps({"fields": service.RoutineRUD.fields().to_list()}))
+            response.headers.set('Content-Type', 'application/json')
+            response.status_code = 200
+            return response
+
+        self.app.add_url_rule('/fields/routinerud', 'fields', fields)
+
+        self.assertEqual(self.api.get('/fields/routinerud').json["fields"], [
             {
                 "name": "id",
                 "readonly": True
@@ -5088,8 +4630,8 @@ class TestRoutineRUD(TestRest):
                     2
                 ],
                 "labels": {
-                    1: "unit",
-                    2: "test"
+                    '1': "unit",
+                    '2': "test"
                 }
             },
             {
@@ -5126,16 +4668,16 @@ class TestRoutineRUD(TestRest):
     @unittest.mock.patch("nandyio.people.Person", nandyio.unittest.people.MockPerson)
     def test_options(self):
 
-        routine = self.sample.routine("unit", "test", status="opened", data={"text": 1})
+        routine_id = self.sample.routine("unit", "test", status="opened", data={"text": 1}).id
 
-        response = self.api.options(f"/routine/{routine.id}")
+        response = self.api.options(f"/routine/{routine_id}")
 
         self.assertStatusFields(response, 200, [
             {
                 "name": "id",
                 "readonly": True,
-                "value": routine.id,
-                "original": routine.id
+                "value": routine_id,
+                "original": routine_id
             },
             {
                 "name": "person_id",
@@ -5190,7 +4732,7 @@ class TestRoutineRUD(TestRest):
             }
         ])
 
-        response = self.api.options(f"/routine/{routine.id}", json={"routine": {
+        response = self.api.options(f"/routine/{routine_id}", json={"routine": {
             "nope": "bad"
         }})
 
@@ -5198,8 +4740,8 @@ class TestRoutineRUD(TestRest):
             {
                 "name": "id",
                 "readonly": True,
-                "value": routine.id,
-                "original": routine.id
+                "value": routine_id,
+                "original": routine_id
             },
             {
                 "name": "person_id",
@@ -5255,7 +4797,7 @@ class TestRoutineRUD(TestRest):
             "unknown field 'nope'"
         ])
 
-        response = self.api.options(f"/routine/{routine.id}", json={"routine": {
+        response = self.api.options(f"/routine/{routine_id}", json={"routine": {
             "person_id": 2,
             "name": "yup",
             "status": "closed",
@@ -5266,8 +4808,8 @@ class TestRoutineRUD(TestRest):
             {
                 "name": "id",
                 "readonly": True,
-                "value": routine.id,
-                "original": routine.id
+                "value": routine_id,
+                "original": routine_id
             },
             {
                 "name": "person_id",
@@ -5339,23 +4881,23 @@ class TestRoutineRUD(TestRest):
 
     def test_patch(self):
 
-        routine = self.sample.routine("test", "unit")
+        routine_id = self.sample.routine("test", "unit").id
 
-        self.assertStatusValue(self.api.patch(f"/routine/{routine.id}", json={
+        self.assertStatusValue(self.api.patch(f"/routine/{routine_id}", json={
             "routine": {
                 "status": "closed"
             }
         }), 202, "updated", 1)
 
-        self.assertStatusModel(self.api.get(f"/routine/{routine.id}"), 200, "routine", {
+        self.assertStatusModel(self.api.get(f"/routine/{routine_id}"), 200, "routine", {
             "status": "closed"
         })
 
     def test_delete(self):
 
-        routine = self.sample.routine("test", "unit")
+        routine_id = self.sample.routine("test", "unit").id
 
-        self.assertStatusValue(self.api.delete(f"/routine/{routine.id}"), 202, "deleted", 1)
+        self.assertStatusValue(self.api.delete(f"/routine/{routine_id}"), 202, "deleted", 1)
 
         self.assertStatusModels(self.api.get("/routine"), 200, "routines", [])
 
@@ -5382,21 +4924,21 @@ class TestRoutineA(TestRest):
         # remind
 
         self.assertStatusValue(self.api.patch(f"/routine/{routine.id}/remind"), 202, "updated", True)
-        item = self.session.query(mysql.Routine).get(routine.id)
+        item = self.session.query(models.Routine).get(routine.id)
         self.session.commit()
         self.assertEqual(item.data["notified"], 7)
 
         # next
 
         self.assertStatusValue(self.api.patch(f"/routine/{routine.id}/next"), 202, "updated", True)
-        item = self.session.query(mysql.Routine).get(routine.id)
+        item = self.session.query(models.Routine).get(routine.id)
         self.session.commit()
         self.assertEqual(item.data["tasks"][0]["end"], 7)
 
         # pause
 
         self.assertStatusValue(self.api.patch(f"/routine/{routine.id}/pause"), 202, "updated", True)
-        item = self.session.query(mysql.Routine).get(routine.id)
+        item = self.session.query(models.Routine).get(routine.id)
         self.session.commit()
         self.assertTrue(item.data["paused"])
         self.assertStatusValue(self.api.patch(f"/routine/{routine.id}/pause"), 202, "updated", False)
@@ -5404,7 +4946,7 @@ class TestRoutineA(TestRest):
         # unpause
 
         self.assertStatusValue(self.api.patch(f"/routine/{routine.id}/unpause"), 202, "updated", True)
-        item = self.session.query(mysql.Routine).get(routine.id)
+        item = self.session.query(models.Routine).get(routine.id)
         self.session.commit()
         self.assertFalse(item.data["paused"])
         self.assertStatusValue(self.api.patch(f"/routine/{routine.id}/unpause"), 202, "updated", False)
@@ -5412,7 +4954,7 @@ class TestRoutineA(TestRest):
         # skip
 
         self.assertStatusValue(self.api.patch(f"/routine/{routine.id}/skip"), 202, "updated", True)
-        item = self.session.query(mysql.Routine).get(routine.id)
+        item = self.session.query(models.Routine).get(routine.id)
         self.session.commit()
         self.assertTrue(item.data["skipped"])
         self.assertStatusValue(self.api.patch(f"/routine/{routine.id}/skip"), 202, "updated", False)
@@ -5420,7 +4962,7 @@ class TestRoutineA(TestRest):
         # unskip
 
         self.assertStatusValue(self.api.patch(f"/routine/{routine.id}/unskip"), 202, "updated", True)
-        item = self.session.query(mysql.Routine).get(routine.id)
+        item = self.session.query(models.Routine).get(routine.id)
         self.session.commit()
         self.assertFalse(item.data["skipped"])
         self.assertStatusValue(self.api.patch(f"/routine/{routine.id}/unskip"), 202, "updated", False)
@@ -5428,7 +4970,7 @@ class TestRoutineA(TestRest):
         # complete
 
         self.assertStatusValue(self.api.patch(f"/routine/{routine.id}/complete"), 202, "updated", True)
-        item = self.session.query(mysql.Routine).get(routine.id)
+        item = self.session.query(models.Routine).get(routine.id)
         self.session.commit()
         self.assertEqual(item.status, "closed")
         self.assertStatusValue(self.api.patch(f"/routine/{routine.id}/complete"), 202, "updated", False)
@@ -5436,7 +4978,7 @@ class TestRoutineA(TestRest):
         # uncomplete
 
         self.assertStatusValue(self.api.patch(f"/routine/{routine.id}/uncomplete"), 202, "updated", True)
-        item = self.session.query(mysql.Routine).get(routine.id)
+        item = self.session.query(models.Routine).get(routine.id)
         self.session.commit()
         self.assertEqual(item.status, "opened")
         self.assertStatusValue(self.api.patch(f"/routine/{routine.id}/uncomplete"), 202, "updated", False)
@@ -5444,7 +4986,7 @@ class TestRoutineA(TestRest):
         # expire
 
         self.assertStatusValue(self.api.patch(f"/routine/{routine.id}/expire"), 202, "updated", True)
-        item = self.session.query(mysql.Routine).get(routine.id)
+        item = self.session.query(models.Routine).get(routine.id)
         self.session.commit()
         self.assertTrue(item.data["expired"])
         self.assertStatusValue(self.api.patch(f"/routine/{routine.id}/expire"), 202, "updated", False)
@@ -5452,7 +4994,7 @@ class TestRoutineA(TestRest):
         # unexpire
 
         self.assertStatusValue(self.api.patch(f"/routine/{routine.id}/unexpire"), 202, "updated", True)
-        item = self.session.query(mysql.Routine).get(routine.id)
+        item = self.session.query(models.Routine).get(routine.id)
         self.session.commit()
         self.assertFalse(item.data["expired"])
         self.assertStatusValue(self.api.patch(f"/routine/{routine.id}/unexpire"), 202, "updated", False)
@@ -5593,51 +5135,92 @@ class TestTask(TestRest):
         mock_task_notify.assert_called_once()
         mock_routine_notify.assert_called_once()
 
-
-    @unittest.mock.patch("flask.request")
+    @unittest.mock.patch("nandyio.people.Person", nandyio.unittest.people.MockPerson)
     @unittest.mock.patch("service.time.time", unittest.mock.MagicMock(return_value=7))
-    @unittest.mock.patch("service.Task.notify")
-    @unittest.mock.patch("service.Routine.notify")
-    @unittest.mock.patch("service.ToDo.notify", unittest.mock.MagicMock())
-    def test_complete(self, mock_routine_notify, mock_task_notify, mock_request):
-
-        mock_request.session = self.session
+    @unittest.mock.patch("klotio.service.notify")
+    def test_complete(self, mock_notify):
 
         todo = self.sample.todo("unit")
 
-        routine = self.sample.routine("unit", "hey", data={
+        routine_id = self.sample.routine("unit", "hey", data={
             "text": "hey",
             "language": "cursing",
             "tasks": [{
                 "text": "do it",
                 "todo": todo.id
             }]
-        })
+        }).id
 
-        self.assertTrue(service.Task.complete(routine.data["tasks"][0], routine))
+        @klotio.service.require_session
+        def complete():
+            routine = self.session.query(models.Routine).get(flask.request.json["complete"])
+            response = flask.make_response(json.dumps({"complete": service.Task.complete(routine.data["tasks"][0], routine)}))
+            flask.request.session.commit()
+            response.headers.set('Content-Type', 'application/json')
+            response.status_code = 200
+            return response
+
+        self.app.add_url_rule('/complete/task', 'complete', complete)
+
+        self.assertTrue(self.api.get("/complete/task", json={"complete": routine_id}).json["complete"])
+
+        routine = self.session.query(models.Routine).get(routine_id)
+
         self.assertTrue(routine.data["tasks"][0]["end"], 7)
         self.assertEqual(routine.status, "closed")
-        item = self.session.query(mysql.ToDo).get(todo.id)
-        self.assertEqual(item.status, "closed")
-        mock_task_notify.assert_called_once_with("complete", routine.data["tasks"][0], routine)
-        mock_routine_notify.assert_called_once_with("complete", routine)
 
-        self.assertFalse(service.Task.complete(routine.data["tasks"][0], routine))
-        mock_task_notify.assert_called_once()
-        mock_routine_notify.assert_called_once()
+        self.assertEqual(mock_notify.call_args_list[0].args[0], {
+            "kind": "task",
+            "action": "complete",
+            "routine": {
+                "id": 1,
+                "person_id": 1,
+                "name": "hey",
+                "status": "opened",
+                "created": 7,
+                "updated": 7,
+                "data":{
+                    "text": "hey",
+                    "language": "cursing",
+                    "tasks": [
+                        {
+                            "text":"do it",
+                            "todo": 1,
+                            "end": 7,
+                            "start": 7,
+                            "notified": 7
+                        }
+                    ],
+                    "notified": 7
+                },
+                "yaml": "language: cursing\nnotified: 7\ntasks:\n- end: 7\n  notified: 7\n  start: 7\n  text: do it\n  todo: 1\ntext: hey\n"
+            },
+            "task": {
+                "end": 7,
+                "notified": 7,
+                "start": 7,
+                "text": "do it",
+                "todo": 1
+            },
+            "person": nandyio.unittest.people.MockPerson.model(name="unit")
+        })
+        self.assertEqual(mock_notify.call_args_list[1].args[0], {
+            "kind": "routine",
+            "action": "complete",
+            "routine": service.Routine.response(routine),
+            "person": nandyio.unittest.people.MockPerson.model(name="unit")
+        })
 
-    @unittest.mock.patch("flask.request")
+        self.assertFalse(self.api.get("/complete/task", json={"complete": routine_id}).json["complete"])
+
+    @unittest.mock.patch("nandyio.people.Person", nandyio.unittest.people.MockPerson)
     @unittest.mock.patch("service.time.time", unittest.mock.MagicMock(return_value=7))
-    @unittest.mock.patch("service.Task.notify")
-    @unittest.mock.patch("service.Routine.notify")
-    @unittest.mock.patch("service.ToDo.notify", unittest.mock.MagicMock())
-    def test_uncomplete(self, mock_routine_notify, mock_task_notify, mock_request):
-
-        mock_request.session = self.session
+    @unittest.mock.patch("klotio.service.notify")
+    def test_uncomplete(self, mock_notify):
 
         todo = self.sample.todo("unit", status="closed", data={"end": 0})
 
-        routine = self.sample.routine("unit", "hey", status="closed", data={
+        routine_id = self.sample.routine("unit", "hey", status="closed", data={
             "text": "hey",
             "language": "cursing",
             "end": 0,
@@ -5646,19 +5229,70 @@ class TestTask(TestRest):
                 "end": 0,
                 "todo": todo.id
             }]
-        })
+        }).id
 
-        self.assertTrue(service.Task.uncomplete(routine.data["tasks"][0], routine))
+        @klotio.service.require_session
+        def uncomplete():
+            routine = self.session.query(models.Routine).get(flask.request.json["uncomplete"])
+            response = flask.make_response(json.dumps({"uncomplete": service.Task.uncomplete(routine.data["tasks"][0], routine)}))
+            flask.request.session.commit()
+            response.headers.set('Content-Type', 'application/json')
+            response.status_code = 200
+            return response
+
+        self.app.add_url_rule('/uncomplete/task', 'uncomplete', uncomplete)
+
+        self.assertTrue(self.api.get("/uncomplete/task", json={"uncomplete": routine_id}).json["uncomplete"])
+
+        routine = self.session.query(models.Routine).get(routine_id)
+        self.session.commit()
+
         self.assertNotIn("end", routine.data["tasks"][0])
         self.assertEqual(routine.status, "opened")
-        item = self.session.query(mysql.ToDo).get(todo.id)
-        self.assertEqual(item.status, "opened")
-        mock_task_notify.assert_called_once_with("uncomplete", routine.data["tasks"][0], routine)
-        mock_routine_notify.assert_called_once_with("uncomplete", routine)
 
-        self.assertFalse(service.Task.uncomplete(routine.data["tasks"][0], routine))
-        mock_task_notify.assert_called_once()
-        mock_routine_notify.assert_called_once()
+        item = self.session.query(models.ToDo).get(todo.id)
+        self.assertEqual(item.status, "opened")
+
+        self.assertEqual(mock_notify.call_args_list[0].args[0], {
+            "kind": "task",
+            "action": "uncomplete",
+            "routine": {
+                "id": 1,
+                "person_id": 1,
+                "name": "hey",
+                "status": "closed",
+                "created": 7,
+                "updated": 7,
+                "data":  {
+                    "text": "hey",
+                    "language": "cursing",
+                    "tasks": [
+                        {
+                            "text": "do it",
+                            "todo": 1,
+                            "notified": 7
+                        }
+                    ],
+                    "notified": 7,
+                    "end": 0
+                },
+                "yaml": "end: 0\nlanguage: cursing\nnotified: 7\ntasks:\n- notified: 7\n  text: do it\n  todo: 1\ntext: hey\n"
+            },
+            "task": {
+                "notified": 7,
+                "text": "do it",
+                "todo": 1
+            },
+            "person": nandyio.unittest.people.MockPerson.model(name="unit")
+        })
+        self.assertEqual(mock_notify.call_args_list[1].args[0], {
+            "kind": "routine",
+            "action": "uncomplete",
+            "routine": service.Routine.response(routine),
+            "person": nandyio.unittest.people.MockPerson.model(name="unit")
+        })
+
+        self.assertFalse(self.api.get("/uncomplete/task", json={"uncomplete": routine_id}).json["uncomplete"])
 
 class TestTaskA(TestRest):
 
@@ -5679,14 +5313,14 @@ class TestTaskA(TestRest):
         # remind
 
         self.assertStatusValue(self.api.patch(f"/routine/{routine.id}/task/0/remind"), 202, "updated", True)
-        item = self.session.query(mysql.Routine).get(routine.id)
+        item = self.session.query(models.Routine).get(routine.id)
         self.session.commit()
         self.assertEqual(item.data["tasks"][0]["notified"], 7)
 
         # pause
 
         self.assertStatusValue(self.api.patch(f"/routine/{routine.id}/task/0/pause"), 202, "updated", True)
-        item = self.session.query(mysql.Routine).get(routine.id)
+        item = self.session.query(models.Routine).get(routine.id)
         self.session.commit()
         self.assertTrue(item.data["tasks"][0]["paused"])
         self.assertStatusValue(self.api.patch(f"/routine/{routine.id}/task/0/pause"), 202, "updated", False)
@@ -5694,7 +5328,7 @@ class TestTaskA(TestRest):
         # unpause
 
         self.assertStatusValue(self.api.patch(f"/routine/{routine.id}/task/0/unpause"), 202, "updated", True)
-        item = self.session.query(mysql.Routine).get(routine.id)
+        item = self.session.query(models.Routine).get(routine.id)
         self.session.commit()
         self.assertFalse(item.data["tasks"][0]["paused"])
         self.assertStatusValue(self.api.patch(f"/routine/{routine.id}/task/0/unpause"), 202, "updated", False)
@@ -5702,7 +5336,7 @@ class TestTaskA(TestRest):
         # skip
 
         self.assertStatusValue(self.api.patch(f"/routine/{routine.id}/task/0/skip"), 202, "updated", True)
-        item = self.session.query(mysql.Routine).get(routine.id)
+        item = self.session.query(models.Routine).get(routine.id)
         self.session.commit()
         self.assertTrue(item.data["tasks"][0]["skipped"])
         self.assertStatusValue(self.api.patch(f"/routine/{routine.id}/task/0/skip"), 202, "updated", False)
@@ -5710,7 +5344,7 @@ class TestTaskA(TestRest):
         # unskip
 
         self.assertStatusValue(self.api.patch(f"/routine/{routine.id}/task/0/unskip"), 202, "updated", True)
-        item = self.session.query(mysql.Routine).get(routine.id)
+        item = self.session.query(models.Routine).get(routine.id)
         self.session.commit()
         self.assertFalse(item.data["tasks"][0]["skipped"])
         self.assertStatusValue(self.api.patch(f"/routine/{routine.id}/task/0/unskip"), 202, "updated", False)
@@ -5718,7 +5352,7 @@ class TestTaskA(TestRest):
         # complete
 
         self.assertStatusValue(self.api.patch(f"/routine/{routine.id}/task/0/complete"), 202, "updated", True)
-        item = self.session.query(mysql.Routine).get(routine.id)
+        item = self.session.query(models.Routine).get(routine.id)
         self.session.commit()
         self.assertEqual(item.status, "closed")
         self.assertStatusValue(self.api.patch(f"/routine/{routine.id}/task/0/complete"), 202, "updated", False)
@@ -5726,7 +5360,7 @@ class TestTaskA(TestRest):
         # uncomplete
 
         self.assertStatusValue(self.api.patch(f"/routine/{routine.id}/task/0/uncomplete"), 202, "updated", True)
-        item = self.session.query(mysql.Routine).get(routine.id)
+        item = self.session.query(models.Routine).get(routine.id)
         self.session.commit()
         self.assertEqual(item.status, "opened")
         self.assertStatusValue(self.api.patch(f"/routine/{routine.id}/task/0/uncomplete"), 202, "updated", False)

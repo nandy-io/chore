@@ -1,0 +1,16 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gui
+  namespace: chore-nandy-io
+spec:
+  template:
+    spec:
+      containers:
+      - name: gui
+        image: gui-chore-nandy-io
+        imagePullPolicy: Never
+        readinessProbe:
+          initialDelaySeconds: 20
+        livenessProbe:
+          initialDelaySeconds: 20

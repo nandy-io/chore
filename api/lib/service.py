@@ -15,7 +15,7 @@ import sqlalchemy.exc
 
 import opengui
 
-import mysql
+import models
 import klotio.service
 import nandyio.people
 
@@ -23,7 +23,7 @@ def app():
 
     app = flask.Flask("nandy-io-speech-api")
 
-    app.mysql = mysql.MySQL()
+    app.mysql = models.MySQL()
 
     app.redis = redis.StrictRedis(host=os.environ['REDIS_HOST'], port=int(os.environ['REDIS_PORT']))
     app.channel = os.environ['REDIS_CHANNEL']
@@ -59,8 +59,8 @@ class Template(klotio.service.Model):
 
     SINGULAR = "template"
     PLURAL = "templates"
-    MODEL = mysql.Template
-    ORDER = [mysql.Template.name]
+    MODEL = models.Template
+    ORDER = [models.Template.name]
 
     FIELDS = [
         {
@@ -210,14 +210,14 @@ class Status(klotio.service.Model):
 
             if "template_id" in kwargs:
                 template = flask.request.session.query(
-                    mysql.Template
+                    models.Template
                 ).get(
                     kwargs["template_id"]
                 )
 
             elif "template" in kwargs:
                 template = flask.request.session.query(
-                    mysql.Template
+                    models.Template
                 ).filter_by(
                     kind=cls.SINGULAR,
                     name=kwargs["template"]
@@ -437,8 +437,8 @@ class Area(Value):
 
     SINGULAR = "area"
     PLURAL = "areas"
-    MODEL = mysql.Area
-    ORDER = [mysql.Area.name]
+    MODEL = models.Area
+    ORDER = [models.Area.name]
 
     @classmethod
     def wrong(cls, model):
@@ -449,6 +449,7 @@ class Area(Value):
         if model.status == "positive":
 
             model.status = "negative"
+
             cls.notify("wrong", model)
 
             if "todo" in model.data:
@@ -471,8 +472,8 @@ class Act(Value):
 
     SINGULAR = "act"
     PLURAL = "acts"
-    MODEL = mysql.Act
-    ORDER = [mysql.Act.created.desc()]
+    MODEL = models.Act
+    ORDER = [models.Act.created.desc()]
 
     @classmethod
     def create(cls, **kwargs):
@@ -657,8 +658,8 @@ class ToDo(State):
 
     SINGULAR = "todo"
     PLURAL = "todos"
-    MODEL = mysql.ToDo
-    ORDER = [mysql.ToDo.created.desc()]
+    MODEL = models.ToDo
+    ORDER = [models.ToDo.created.desc()]
 
     @classmethod
     def todos(cls, data):
@@ -676,7 +677,7 @@ class ToDo(State):
         todos = []
 
         for todo in flask.request.session.query(
-            mysql.ToDo
+            models.ToDo
         ).filter_by(
             person_id=person["id"],
             status="opened"
@@ -715,7 +716,7 @@ class ToDo(State):
             cls.notify("complete", model)
 
             if "area" in model.data:
-                Area.right(flask.request.session.query(mysql.Area).get(model.data["area"]))
+                Area.right(flask.request.session.query(models.Area).get(model.data["area"]))
 
             if "act" in model.data:
 
@@ -756,8 +757,8 @@ class Routine(State):
 
     SINGULAR = "routine"
     PLURAL = "routines"
-    MODEL = mysql.Routine
-    ORDER = [mysql.Routine.created.desc()]
+    MODEL = models.Routine
+    ORDER = [models.Routine.created.desc()]
     ACTIONS = State.ACTIONS + ["next"]
 
     @staticmethod
@@ -771,7 +772,7 @@ class Routine(State):
             tasks = []
 
             for todo in flask.request.session.query(
-                mysql.ToDo
+                models.ToDo
             ).filter_by(
                 person_id=fields["person_id"],
                 status="opened"
@@ -998,7 +999,7 @@ class Task:
             Routine.check(routine)
 
             if "todo" in task:
-                ToDo.complete(flask.request.session.query(mysql.ToDo).get(task["todo"]))
+                ToDo.complete(flask.request.session.query(models.ToDo).get(task["todo"]))
 
             return True
 
@@ -1018,7 +1019,7 @@ class Task:
             Routine.uncomplete(routine)
 
             if "todo" in task:
-                ToDo.uncomplete(flask.request.session.query(mysql.ToDo).get(task["todo"]))
+                ToDo.uncomplete(flask.request.session.query(models.ToDo).get(task["todo"]))
 
             return True
 
@@ -1029,7 +1030,7 @@ class TaskA(Task, flask_restful.Resource):
     @klotio.service.require_session
     def patch(self, routine_id, task_id, action):
 
-        routine = flask.request.session.query(mysql.Routine).get(routine_id)
+        routine = flask.request.session.query(models.Routine).get(routine_id)
         task = routine.data["tasks"][task_id]
 
         if action in self.ACTIONS:

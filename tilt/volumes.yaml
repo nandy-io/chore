@@ -1,0 +1,8 @@
+- op: remove
+  path: /spec/template/spec/volumes/0
+- op: add
+  path: /spec/template/spec/volumes/0
+  value:
+    name: config
+    hostPath:
+      type: Directory
