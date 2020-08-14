@@ -1,7 +1,7 @@
 import unittest
 import unittest.mock
-import klotio.unittest
-import nandyio.unittest.people
+import klotio_unittest
+import nandyio_people_unittest
 
 import os
 import json
@@ -11,12 +11,16 @@ import flask
 import opengui
 import sqlalchemy.exc
 
+import klotio
+import klotio_sqlalchemy_restful
+import nandyio_people
+
 import models
 import test_models
 
 import service
 
-class TestRest(klotio.unittest.TestCase):
+class TestRest(klotio_unittest.TestCase):
 
     maxDiff = None
 
@@ -26,7 +30,7 @@ class TestRest(klotio.unittest.TestCase):
         "REDIS_PORT": "667",
         "REDIS_CHANNEL": "stuff"
     })
-    @unittest.mock.patch("redis.StrictRedis", klotio.unittest.MockRedis)
+    @unittest.mock.patch("redis.StrictRedis", klotio_unittest.MockRedis)
     def setUpClass(cls):
 
         cls.app = service.app()
@@ -80,30 +84,38 @@ class TestGroup(TestRest):
 
 class TestTemplate(TestRest):
 
-    @unittest.mock.patch("glob.glob")
-    @unittest.mock.patch("service.open", create=True)
-    def test_integrations(self, mock_open, mock_glob):
+    @unittest.mock.patch("klotio.integrations", klotio_unittest.MockIntegrations())
+    def test_integrations(self):
 
-        def glob(pattern):
+        klotio.integrations.add("template", {
+            "name": "unit.test",
+            "description": "template"
+        })
 
-            return [f"/opt/service/config/integration_unit.test_{pattern.split('_')[-1].split('.')[0]}.fields.yaml"]
+        klotio.integrations.add("area", {
+            "name": "unit.test",
+            "description": "area"
+        })
 
-        mock_glob.side_effect = glob
+        klotio.integrations.add("act", {
+            "name": "unit.test",
+            "description": "act"
+        })
 
-        def contents(path, mode):
+        klotio.integrations.add("todo", {
+            "name": "unit.test",
+            "description": "todo"
+        })
 
-            return unittest.mock.mock_open(read_data=yaml.safe_dump({"description": path.split('_')[-1].split('.')[0]})).return_value
-
-        mock_open.side_effect = contents
+        klotio.integrations.add("routine", {
+            "name": "unit.test",
+            "description": "routine"
+        })
 
         self.assertEqual(service.Template.integrations("template"), [{
             "name": "unit.test",
             "description": "template"
         }])
-
-        mock_glob.assert_called_once_with("/opt/service/config/integration_*_template.fields.yaml")
-
-        mock_open.assert_called_once_with("/opt/service/config/integration_unit.test_template.fields.yaml", "r")
 
         self.assertEqual(service.Template.integrations("area"), [{
             "name": "unit.test",
@@ -127,21 +139,18 @@ class TestTemplate(TestRest):
 
         self.assertEqual(service.Template.integrations("nope"), [])
 
-    @unittest.mock.patch("glob.glob")
-    @unittest.mock.patch("service.open", create=True)
-    def test_request(self, mock_open, mock_glob):
+    @unittest.mock.patch("klotio.integrations", klotio_unittest.MockIntegrations())
+    def test_request(self):
 
-        def glob(pattern):
+        klotio.integrations.add("area", {
+            "name": "unit.test",
+            "description": "area"
+        })
 
-            return [f"/opt/service/config/integration_unit.test_{pattern.split('_')[-1].split('.')[0]}.fields.yaml"]
-
-        mock_glob.side_effect = glob
-
-        def contents(path, mode):
-
-            return unittest.mock.mock_open(read_data=yaml.safe_dump({"description": path.split('_')[-1].split('.')[0]})).return_value
-
-        mock_open.side_effect = contents
+        klotio.integrations.add("template", {
+            "name": "unit.test",
+            "description": "template"
+        })
 
         self.assertEqual(service.Template.request({
             "kind": "area",
@@ -159,10 +168,6 @@ class TestTemplate(TestRest):
             }
         })
 
-        mock_glob.assert_called_once_with("/opt/service/config/integration_*_area.fields.yaml")
-
-        mock_open.assert_called_once_with("/opt/service/config/integration_unit.test_area.fields.yaml", "r")
-
         self.assertEqual(service.Template.request({
             "unit.test": {
                 "integrate": "yep"
@@ -177,25 +182,18 @@ class TestTemplate(TestRest):
             }
         })
 
-        mock_glob.assert_called_with("/opt/service/config/integration_*_template.fields.yaml")
+    @unittest.mock.patch("klotio.integrations", klotio_unittest.MockIntegrations())
+    def test_response(self):
 
-        mock_open.assert_called_with("/opt/service/config/integration_unit.test_template.fields.yaml", "r")
+        klotio.integrations.add("area", {
+            "name": "unit.test",
+            "description": "area"
+        })
 
-    @unittest.mock.patch("glob.glob")
-    @unittest.mock.patch("service.open", create=True)
-    def test_response(self, mock_open, mock_glob):
-
-        def glob(pattern):
-
-            return [f"/opt/service/config/integration_unit.test_{pattern.split('_')[-1].split('.')[0]}.fields.yaml"]
-
-        mock_glob.side_effect = glob
-
-        def contents(path, mode):
-
-            return unittest.mock.mock_open(read_data=yaml.safe_dump({"description": path.split('_')[-1].split('.')[0]})).return_value
-
-        mock_open.side_effect = contents
+        klotio.integrations.add("template", {
+            "name": "unit.test",
+            "description": "template"
+        })
 
         template = self.sample.template(
             "unit",
@@ -221,10 +219,6 @@ class TestTemplate(TestRest):
             "yaml": yaml.dump({"d": 4}, default_flow_style=False)
         })
 
-        mock_glob.assert_called_once_with("/opt/service/config/integration_*_area.fields.yaml")
-
-        mock_open.assert_called_once_with("/opt/service/config/integration_unit.test_area.fields.yaml", "r")
-
         template.kind = None
 
         self.assertEqual(service.Template.response(template), {
@@ -240,22 +234,15 @@ class TestTemplate(TestRest):
             "yaml": yaml.dump({"d": 4}, default_flow_style=False)
         })
 
-        mock_glob.assert_called_with("/opt/service/config/integration_*_template.fields.yaml")
-
-        mock_open.assert_called_with("/opt/service/config/integration_unit.test_template.fields.yaml", "r")
-
     def test_choices(self):
 
         unit = self.sample.template("unit", "todo")
         test = self.sample.template("test", "act")
         rest = self.sample.template("rest", "todo")
 
-        @klotio.service.require_session
+        @klotio_sqlalchemy_restful.session
         def choices():
-            response = flask.make_response(json.dumps({"choices": service.Template.choices('todo')}))
-            response.headers.set('Content-Type', 'application/json')
-            response.status_code = 200
-            return response
+            return {"choices": service.Template.choices('todo')}
 
         self.app.add_url_rule('/choices/template', 'choices', choices)
 
@@ -272,21 +259,23 @@ class TestTemplate(TestRest):
 
 class TestTemplateCL(TestRest):
 
-    @unittest.mock.patch("glob.glob")
-    @unittest.mock.patch("service.open", create=True)
-    def test_fields(self, mock_open, mock_glob):
+    @unittest.mock.patch("klotio.integrations", klotio_unittest.MockIntegrations())
+    def test_fields(self):
 
-        def glob(pattern):
+        klotio.integrations.add("area", {
+            "name": "unit.test",
+            "description": "area"
+        })
 
-            return [f"/opt/service/config/integration_unit.test_{pattern.split('_')[-1].split('.')[0]}.fields.yaml"]
+        klotio.integrations.add("act", {
+            "name": "unit.test",
+            "description": "act"
+        })
 
-        mock_glob.side_effect = glob
-
-        def contents(path, mode):
-
-            return unittest.mock.mock_open(read_data=yaml.safe_dump({"description": path.split('_')[-1].split('.')[0]})).return_value
-
-        mock_open.side_effect = contents
+        klotio.integrations.add("template", {
+            "name": "unit.test",
+            "description": "template"
+        })
 
         self.assertEqual(service.TemplateCL.fields({"kind": "area"}, {"kind": "act"}).to_list(), [
             {
@@ -488,21 +477,23 @@ class TestTemplateCL(TestRest):
 
 class TestTemplateRUD(TestRest):
 
-    @unittest.mock.patch("glob.glob")
-    @unittest.mock.patch("service.open", create=True)
-    def test_fields(self, mock_open, mock_glob):
+    @unittest.mock.patch("klotio.integrations", klotio_unittest.MockIntegrations())
+    def test_fields(self):
 
-        def glob(pattern):
+        klotio.integrations.add("area", {
+            "name": "unit.test",
+            "description": "area"
+        })
 
-            return [f"/opt/service/config/integration_unit.test_{pattern.split('_')[-1].split('.')[0]}.fields.yaml"]
+        klotio.integrations.add("act", {
+            "name": "unit.test",
+            "description": "act"
+        })
 
-        mock_glob.side_effect = glob
-
-        def contents(path, mode):
-
-            return unittest.mock.mock_open(read_data=yaml.safe_dump({"description": path.split('_')[-1].split('.')[0]})).return_value
-
-        mock_open.side_effect = contents
+        klotio.integrations.add("template", {
+            "name": "unit.test",
+            "description": "template"
+        })
 
         self.assertEqual(service.TemplateRUD.fields({"kind": "area"}, {"kind": "act"}).to_list(), [
             {
@@ -754,16 +745,13 @@ class TestTemplateRUD(TestRest):
 
 class TestArea(TestRest):
 
-    @unittest.mock.patch("nandyio.people.Person", nandyio.unittest.people.MockPerson)
+    @unittest.mock.patch("nandyio_people.Person", nandyio_people_unittest.MockPerson)
     @unittest.mock.patch("service.time.time", unittest.mock.MagicMock(return_value=7))
     def test_build(self):
 
-        @klotio.service.require_session
+        @klotio_sqlalchemy_restful.session
         def build():
-            response = flask.make_response(json.dumps({"build": service.Area.build(**flask.request.json)}))
-            response.headers.set('Content-Type', 'application/json')
-            response.status_code = 200
-            return response
+            return {"build": service.Area.build(**flask.request.json)}
 
         self.app.add_url_rule('/build/area', 'build', build)
 
@@ -854,9 +842,9 @@ class TestArea(TestRest):
             }
         })
 
-    @unittest.mock.patch("nandyio.people.Person", nandyio.unittest.people.MockPerson)
+    @unittest.mock.patch("nandyio_people.Person", nandyio_people_unittest.MockPerson)
     @unittest.mock.patch("service.time.time", unittest.mock.MagicMock(return_value=7))
-    @unittest.mock.patch("klotio.service.notify")
+    @unittest.mock.patch("klotio_sqlalchemy_restful.notify")
     def test_notify(self, mock_notify):
 
         model = self.sample.area("unit", "test")
@@ -870,22 +858,19 @@ class TestArea(TestRest):
             "kind": "area",
             "action": "test",
             "area": service.Area.response(model),
-            "person": nandyio.unittest.people.MockPerson.model(name="unit")
+            "person": nandyio_people.Person.model(name="unit")
         })
 
-    @unittest.mock.patch("nandyio.people.Person", nandyio.unittest.people.MockPerson)
+    @unittest.mock.patch("nandyio_people.Person", nandyio_people_unittest.MockPerson)
     @unittest.mock.patch("service.time.time", unittest.mock.MagicMock(return_value=7))
-    @unittest.mock.patch("klotio.service.notify")
+    @unittest.mock.patch("klotio_sqlalchemy_restful.notify")
     def test_create(self, mock_notify):
 
-        @klotio.service.require_session
+        @klotio_sqlalchemy_restful.session
         def create():
             item = service.Area.create(**flask.request.json)
             flask.request.session.commit()
-            response = flask.make_response(json.dumps({"create": item.id}))
-            response.headers.set('Content-Type', 'application/json')
-            response.status_code = 200
-            return response
+            return {"create": item.id}
 
         self.app.add_url_rule('/create/area', 'create', create)
 
@@ -915,12 +900,12 @@ class TestArea(TestRest):
             "kind": "area",
             "action": "create",
             "area": service.Area.response(item),
-            "person": nandyio.unittest.people.MockPerson.model(name="unit")
+            "person": nandyio_people.Person.model(name="unit")
         })
 
-    @unittest.mock.patch("nandyio.people.Person", nandyio.unittest.people.MockPerson)
+    @unittest.mock.patch("nandyio_people.Person", nandyio_people_unittest.MockPerson)
     @unittest.mock.patch("service.time.time", unittest.mock.MagicMock(return_value=7))
-    @unittest.mock.patch("klotio.service.notify")
+    @unittest.mock.patch("klotio_sqlalchemy_restful.notify")
     def test_wrong(self, mock_notify):
 
         self.app.mysql.session = unittest.mock.MagicMock(return_value=self.session)
@@ -934,13 +919,10 @@ class TestArea(TestRest):
 
         area_id = area.id
 
-        @klotio.service.require_session
+        @klotio_sqlalchemy_restful.session
         def wrong():
-            area = self.session.query(models.Area).get(flask.request.json["wrong"])
-            response = flask.make_response(json.dumps({"wrong": service.Area.wrong(area)}))
+            response = {"wrong": service.Area.wrong(self.session.query(models.Area).get(flask.request.json["wrong"]))}
             flask.request.session.commit()
-            response.headers.set('Content-Type', 'application/json')
-            response.status_code = 200
             return response
 
         self.app.add_url_rule('/wrong/area', 'wrong', wrong)
@@ -958,13 +940,13 @@ class TestArea(TestRest):
             "kind": "area",
             "action": "wrong",
             "area": service.Area.response(area),
-            "person": nandyio.unittest.people.MockPerson.model(name="unit")
+            "person": nandyio_people.Person.model(name="unit")
         })
         self.assertEqual(mock_notify.call_args_list[1].args[0], {
             "kind": "todo",
             "action": "create",
             "todo": service.ToDo.response(todo),
-            "person": nandyio.unittest.people.MockPerson.model(name="unit")
+            "person": nandyio_people.Person.model(name="unit")
         })
 
         self.assertFalse(self.api.get("/wrong/area", json={"wrong": area_id}).json["wrong"])
@@ -985,39 +967,20 @@ class TestArea(TestRest):
 
 class TestAreaCL(TestRest):
 
-    @unittest.mock.patch("nandyio.people.Person", nandyio.unittest.people.MockPerson)
-    @unittest.mock.patch("glob.glob")
-    @unittest.mock.patch("service.open", create=True)
-    @unittest.mock.patch("klotio.service.open", create=True)
-    def test_fields(self, mock_klotio_open, mock_open, mock_glob):
+    @unittest.mock.patch("nandyio_people.Person", nandyio_people_unittest.MockPerson)
+    @unittest.mock.patch("klotio.integrations", klotio_unittest.MockIntegrations())
+    def test_fields(self):
 
-        def glob(pattern):
-
-            if pattern == "/opt/service/config/integration_*_area.fields.yaml":
-                return ["/opt/service/config/integration_unit.test_area.fields.yaml"]
-
-            return []
-
-        mock_glob.side_effect = glob
-
-        mock_open.side_effect = [
-            unittest.mock.mock_open(read_data=yaml.safe_dump({"description": "integrate"})).return_value
-        ]
-
-        mock_klotio_open.side_effect = [
-            unittest.mock.mock_open(read_data=yaml.safe_dump({"description": "integrate"})).return_value,
-            unittest.mock.mock_open(read_data=yaml.safe_dump({"description": "integrate"})).return_value
-        ]
+        klotio.integrations.add("area", {
+            "name": "unit.test",
+            "description": "integrate"
+        })
 
         template_id = self.sample.template("test", "area", {"a": 1}).id
 
-        @klotio.service.require_session
+        @klotio_sqlalchemy_restful.session
         def blank_fields():
-
-            response = flask.make_response(json.dumps({"fields": service.AreaCL.fields().to_list()}))
-            response.headers.set('Content-Type', 'application/json')
-            response.status_code = 200
-            return response
+            return {"fields": service.AreaCL.fields().to_list()}
 
         self.app.add_url_rule('/blank_fields/areacl', 'blank_fields', blank_fields)
 
@@ -1066,15 +1029,9 @@ class TestAreaCL(TestRest):
             }
         ])
 
-        mock_klotio_open.assert_called_once_with("/opt/service/config/integration_unit.test_area.fields.yaml", "r")
-
-        @klotio.service.require_session
+        @klotio_sqlalchemy_restful.session
         def template_fields():
-
-            response = flask.make_response(json.dumps({"fields": service.AreaCL.fields({"template_id": template_id}).to_list()}))
-            response.headers.set('Content-Type', 'application/json')
-            response.status_code = 200
-            return response
+            return {"fields": service.AreaCL.fields({"template_id": template_id}).to_list()}
 
         self.app.add_url_rule('/template_fields/areacl', 'template_fields', template_fields)
 
@@ -1126,9 +1083,7 @@ class TestAreaCL(TestRest):
             }
         ])
 
-        mock_open.assert_called_once_with("/opt/service/config/integration_unit.test_area.fields.yaml", "r")
-
-    @unittest.mock.patch("nandyio.people.Person", nandyio.unittest.people.MockPerson)
+    @unittest.mock.patch("nandyio_people.Person", nandyio_people_unittest.MockPerson)
     def test_options(self):
 
         template_id = self.sample.template("test", "area", {"a": 1}).id
@@ -1278,7 +1233,7 @@ class TestAreaCL(TestRest):
             }
         ])
 
-    @unittest.mock.patch("nandyio.people.Person", nandyio.unittest.people.MockPerson)
+    @unittest.mock.patch("nandyio_people.Person", nandyio_people_unittest.MockPerson)
     @unittest.mock.patch("service.time.time", unittest.mock.MagicMock(return_value=7))
     def test_post(self):
 
@@ -1328,31 +1283,19 @@ class TestAreaCL(TestRest):
 
 class TestAreaRUD(TestRest):
 
-    @unittest.mock.patch("nandyio.people.Person", nandyio.unittest.people.MockPerson)
-    @unittest.mock.patch("glob.glob")
-    @unittest.mock.patch("klotio.service.open", create=True)
-    def test_fields(self, mock_open, mock_glob):
+    @unittest.mock.patch("nandyio_people.Person", nandyio_people_unittest.MockPerson)
+    @unittest.mock.patch("klotio.integrations", klotio_unittest.MockIntegrations())
+    def test_fields(self):
 
-        def glob(pattern):
+        klotio.integrations.add("area", {
+            "name": "unit.test",
+            "description": "integrate"
+        })
 
-            if pattern == "/opt/service/config/integration_*_area.fields.yaml":
-                return ["/opt/service/config/integration_unit.test_area.fields.yaml"]
-
-            return []
-
-        mock_glob.side_effect = glob
-
-        mock_open.side_effect = [
-            unittest.mock.mock_open(read_data=yaml.safe_dump({"description": "integrate"})).return_value
-        ]
-
-        @klotio.service.require_session
+        @klotio_sqlalchemy_restful.session
         def fields():
 
-            response = flask.make_response(json.dumps({"fields": service.AreaRUD.fields().to_list()}))
-            response.headers.set('Content-Type', 'application/json')
-            response.status_code = 200
-            return response
+            return {"fields": service.AreaRUD.fields().to_list()}
 
         self.app.add_url_rule('/fields/arearud', 'fields', fields)
 
@@ -1406,9 +1349,7 @@ class TestAreaRUD(TestRest):
             }
         ])
 
-        mock_open.assert_called_once_with("/opt/service/config/integration_unit.test_area.fields.yaml", "r")
-
-    @unittest.mock.patch("nandyio.people.Person", nandyio.unittest.people.MockPerson)
+    @unittest.mock.patch("nandyio_people.Person", nandyio_people_unittest.MockPerson)
     def test_options(self):
 
         area_id = self.sample.area("unit", "test", status="positive", data={"a": 1}).id
@@ -1640,7 +1581,7 @@ class TestAreaRUD(TestRest):
 
 class TestAreaA(TestRest):
 
-    @unittest.mock.patch("nandyio.people.Person", nandyio.unittest.people.MockPerson)
+    @unittest.mock.patch("nandyio_people.Person", nandyio_people_unittest.MockPerson)
     @unittest.mock.patch("service.time.time", unittest.mock.MagicMock(return_value=7))
     def test_patch(self):
 
@@ -1665,16 +1606,14 @@ class TestAreaA(TestRest):
 
 class TestAct(TestRest):
 
-    @unittest.mock.patch("nandyio.people.Person", nandyio.unittest.people.MockPerson)
+    @unittest.mock.patch("nandyio_people.Person", nandyio_people_unittest.MockPerson)
     @unittest.mock.patch("service.time.time", unittest.mock.MagicMock(return_value=7))
     def test_build(self):
 
-        @klotio.service.require_session
+        @klotio_sqlalchemy_restful.session
         def build():
-            response = flask.make_response(json.dumps({"build": service.Act.build(**flask.request.json)}))
-            response.headers.set('Content-Type', 'application/json')
-            response.status_code = 200
-            return response
+
+            return {"build": service.Act.build(**flask.request.json)}
 
         self.app.add_url_rule('/build/act', 'build', build)
 
@@ -1766,9 +1705,9 @@ class TestAct(TestRest):
             }
         })
 
-    @unittest.mock.patch("nandyio.people.Person", nandyio.unittest.people.MockPerson)
+    @unittest.mock.patch("nandyio_people.Person", nandyio_people_unittest.MockPerson)
     @unittest.mock.patch("service.time.time", unittest.mock.MagicMock(return_value=7))
-    @unittest.mock.patch("klotio.service.notify")
+    @unittest.mock.patch("klotio_sqlalchemy_restful.notify")
     def test_notify(self, mock_notify):
 
         model = self.sample.act("unit", "test")
@@ -1782,15 +1721,15 @@ class TestAct(TestRest):
             "kind": "act",
             "action": "test",
             "act": service.Act.response(model),
-            "person": nandyio.unittest.people.MockPerson.model(name="unit")
+            "person": nandyio_people.Person.model(name="unit")
         })
 
-    @unittest.mock.patch("nandyio.people.Person", nandyio.unittest.people.MockPerson)
+    @unittest.mock.patch("nandyio_people.Person", nandyio_people_unittest.MockPerson)
     @unittest.mock.patch("service.time.time", unittest.mock.MagicMock(return_value=7))
-    @unittest.mock.patch("klotio.service.notify")
+    @unittest.mock.patch("klotio_sqlalchemy_restful.notify")
     def test_create(self, mock_notify):
 
-        @klotio.service.require_session
+        @klotio_sqlalchemy_restful.session
         def create():
             item = service.Act.create(**flask.request.json)
             flask.request.session.commit()
@@ -1845,13 +1784,13 @@ class TestAct(TestRest):
                 "kind": "act",
                 "action": "create",
                 "act": service.Act.response(model),
-                "person": nandyio.unittest.people.MockPerson.model(id=1)
+                "person": nandyio_people.Person.model(id=1)
             }),
             unittest.mock.call({
                 "kind": "todo",
                 "action": "create",
                 "todo": service.ToDo.response(todo),
-                "person": nandyio.unittest.people.MockPerson.model(id=1)
+                "person": nandyio_people.Person.model(id=1)
             })
         ])
 
@@ -1903,39 +1842,21 @@ class TestAct(TestRest):
 
 class TestActCL(TestRest):
 
-    @unittest.mock.patch("nandyio.people.Person", nandyio.unittest.people.MockPerson)
-    @unittest.mock.patch("glob.glob")
-    @unittest.mock.patch("service.open", create=True)
-    @unittest.mock.patch("klotio.service.open", create=True)
-    def test_fields(self, mock_klotio_open, mock_open, mock_glob):
+    @unittest.mock.patch("nandyio_people.Person", nandyio_people_unittest.MockPerson)
+    @unittest.mock.patch("klotio.integrations", klotio_unittest.MockIntegrations())
+    def test_fields(self):
 
-        def glob(pattern):
-
-            if pattern == "/opt/service/config/integration_*_act.fields.yaml":
-                return ["/opt/service/config/integration_unit.test_act.fields.yaml"]
-
-            return []
-
-        mock_glob.side_effect = glob
-
-        mock_open.side_effect = [
-            unittest.mock.mock_open(read_data=yaml.safe_dump({"description": "integrate"})).return_value
-        ]
-
-        mock_klotio_open.side_effect = [
-            unittest.mock.mock_open(read_data=yaml.safe_dump({"description": "integrate"})).return_value,
-            unittest.mock.mock_open(read_data=yaml.safe_dump({"description": "integrate"})).return_value
-        ]
+        klotio.integrations.add("act", {
+            "name": "unit.test",
+            "description": "integrate"
+        })
 
         template_id = self.sample.template("test", "act", {"a": 1}).id
 
-        @klotio.service.require_session
+        @klotio_sqlalchemy_restful.session
         def blank_fields():
 
-            response = flask.make_response(json.dumps({"fields": service.ActCL.fields().to_list()}))
-            response.headers.set('Content-Type', 'application/json')
-            response.status_code = 200
-            return response
+            return {"fields": service.ActCL.fields().to_list()}
 
         self.app.add_url_rule('/blank_fields/actcl', 'blank_fields', blank_fields)
 
@@ -1984,15 +1905,10 @@ class TestActCL(TestRest):
             }
         ])
 
-        mock_klotio_open.assert_called_once_with("/opt/service/config/integration_unit.test_act.fields.yaml", "r")
-
-        @klotio.service.require_session
+        @klotio_sqlalchemy_restful.session
         def template_fields():
 
-            response = flask.make_response(json.dumps({"fields": service.ActCL.fields({"template_id": template_id}).to_list()}))
-            response.headers.set('Content-Type', 'application/json')
-            response.status_code = 200
-            return response
+            return {"fields": service.ActCL.fields({"template_id": template_id}).to_list()}
 
         self.app.add_url_rule('/template_fields/actcl', 'template_fields', template_fields)
 
@@ -2044,9 +1960,7 @@ class TestActCL(TestRest):
             }
         ])
 
-        mock_open.assert_called_once_with("/opt/service/config/integration_unit.test_act.fields.yaml", "r")
-
-    @unittest.mock.patch("nandyio.people.Person", nandyio.unittest.people.MockPerson)
+    @unittest.mock.patch("nandyio_people.Person", nandyio_people_unittest.MockPerson)
     def test_options(self):
 
         template_id = self.sample.template("test", "act", {"a": 1}).id
@@ -2196,7 +2110,7 @@ class TestActCL(TestRest):
             }
         ])
 
-    @unittest.mock.patch("nandyio.people.Person", nandyio.unittest.people.MockPerson)
+    @unittest.mock.patch("nandyio_people.Person", nandyio_people_unittest.MockPerson)
     @unittest.mock.patch("service.time.time", unittest.mock.MagicMock(return_value=7))
     def test_post(self):
 
@@ -2246,25 +2160,16 @@ class TestActCL(TestRest):
 
 class TestActRUD(TestRest):
 
-    @unittest.mock.patch("nandyio.people.Person", nandyio.unittest.people.MockPerson)
-    @unittest.mock.patch("glob.glob")
-    @unittest.mock.patch("klotio.service.open", create=True)
-    def test_fields(self, mock_open, mock_glob):
+    @unittest.mock.patch("nandyio_people.Person", nandyio_people_unittest.MockPerson)
+    @unittest.mock.patch("klotio.integrations", klotio_unittest.MockIntegrations())
+    def test_fields(self):
 
-        def glob(pattern):
+        klotio.integrations.add("act", {
+            "name": "unit.test",
+            "description": "integrate"
+        })
 
-            if pattern == "/opt/service/config/integration_*_act.fields.yaml":
-                return ["/opt/service/config/integration_unit.test_act.fields.yaml"]
-
-            return []
-
-        mock_glob.side_effect = glob
-
-        mock_open.side_effect = [
-            unittest.mock.mock_open(read_data=yaml.safe_dump({"description": "integrate"})).return_value
-        ]
-
-        @klotio.service.require_session
+        @klotio_sqlalchemy_restful.session
         def fields():
 
             response = flask.make_response(json.dumps({"fields": service.ActRUD.fields().to_list()}))
@@ -2324,9 +2229,7 @@ class TestActRUD(TestRest):
             }
         ])
 
-        mock_open.assert_called_once_with("/opt/service/config/integration_unit.test_act.fields.yaml", "r")
-
-    @unittest.mock.patch("nandyio.people.Person", nandyio.unittest.people.MockPerson)
+    @unittest.mock.patch("nandyio_people.Person", nandyio_people_unittest.MockPerson)
     def test_options(self):
 
         act_id = self.sample.act("unit", "test", status="positive", data={"a": 1}).id
@@ -2558,7 +2461,7 @@ class TestActRUD(TestRest):
 
 class TestActA(TestRest):
 
-    @unittest.mock.patch("nandyio.people.Person", nandyio.unittest.people.MockPerson)
+    @unittest.mock.patch("nandyio_people.Person", nandyio_people_unittest.MockPerson)
     @unittest.mock.patch("service.time.time", unittest.mock.MagicMock(return_value=7))
     def test_patch(self):
 
@@ -2582,16 +2485,13 @@ class TestActA(TestRest):
 
 class TestToDo(TestRest):
 
-    @unittest.mock.patch("nandyio.people.Person", nandyio.unittest.people.MockPerson)
+    @unittest.mock.patch("nandyio_people.Person", nandyio_people_unittest.MockPerson)
     @unittest.mock.patch("service.time.time", unittest.mock.MagicMock(return_value=7))
     def test_build(self):
 
-        @klotio.service.require_session
+        @klotio_sqlalchemy_restful.session
         def build():
-            response = flask.make_response(json.dumps({"build": service.ToDo.build(**flask.request.json)}))
-            response.headers.set('Content-Type', 'application/json')
-            response.status_code = 200
-            return response
+            return {"build": service.ToDo.build(**flask.request.json)}
 
         self.app.add_url_rule('/build/todo', 'build', build)
 
@@ -2682,9 +2582,9 @@ class TestToDo(TestRest):
             }
         })
 
-    @unittest.mock.patch("nandyio.people.Person", nandyio.unittest.people.MockPerson)
+    @unittest.mock.patch("nandyio_people.Person", nandyio_people_unittest.MockPerson)
     @unittest.mock.patch("service.time.time", unittest.mock.MagicMock(return_value=7))
-    @unittest.mock.patch("klotio.service.notify")
+    @unittest.mock.patch("klotio_sqlalchemy_restful.notify")
     def test_notify(self, mock_notify):
 
         model = self.sample.todo("unit", "test")
@@ -2698,22 +2598,19 @@ class TestToDo(TestRest):
             "kind": "todo",
             "action": "test",
             "todo": service.ToDo.response(model),
-            "person": nandyio.unittest.people.MockPerson.model(name="unit")
+            "person": nandyio_people.Person.model(name="unit")
         })
 
-    @unittest.mock.patch("nandyio.people.Person", nandyio.unittest.people.MockPerson)
+    @unittest.mock.patch("nandyio_people.Person", nandyio_people_unittest.MockPerson)
     @unittest.mock.patch("service.time.time", unittest.mock.MagicMock(return_value=7))
-    @unittest.mock.patch("klotio.service.notify")
+    @unittest.mock.patch("klotio_sqlalchemy_restful.notify")
     def test_create(self, mock_notify):
 
-        @klotio.service.require_session
+        @klotio_sqlalchemy_restful.session
         def create():
             item = service.ToDo.create(**flask.request.json)
             flask.request.session.commit()
-            response = flask.make_response(json.dumps({"create": item.id}))
-            response.headers.set('Content-Type', 'application/json')
-            response.status_code = 200
-            return response
+            return {"create": item.id}
 
         self.app.add_url_rule('/create/todo', 'create', create)
 
@@ -2743,23 +2640,21 @@ class TestToDo(TestRest):
             "kind": "todo",
             "action": "create",
             "todo": service.ToDo.response(model),
-            "person": nandyio.unittest.people.MockPerson.model(id=1)
+            "person": nandyio_people.Person.model(id=1)
         })
 
-    @unittest.mock.patch("nandyio.people.Person", nandyio.unittest.people.MockPerson)
+    @unittest.mock.patch("nandyio_people.Person", nandyio_people_unittest.MockPerson)
     @unittest.mock.patch("service.time.time", unittest.mock.MagicMock(return_value=7))
-    @unittest.mock.patch("klotio.service.notify")
+    @unittest.mock.patch("klotio_sqlalchemy_restful.notify")
     def test_todos(self, mock_notify):
 
         self.sample.todo("unit", status="closed")
         self.sample.todo("test")
 
-        @klotio.service.require_session
+        @klotio_sqlalchemy_restful.session
         def todos():
-            response = flask.make_response(json.dumps({"todos": service.ToDo.todos(flask.request.json["todos"])}))
+            response = {"todos": service.ToDo.todos(flask.request.json["todos"])}
             flask.request.session.commit()
-            response.headers.set('Content-Type', 'application/json')
-            response.status_code = 200
             return response
 
         self.app.add_url_rule('/todos/todo', 'todos', todos)
@@ -2784,7 +2679,7 @@ class TestToDo(TestRest):
         mock_notify.assert_called_once_with({
             "kind": "todos",
             "action": "remind",
-            "person": nandyio.unittest.people.MockPerson.model(name="unit"),
+            "person": nandyio_people.Person.model(name="unit"),
             "chore-speech.nandy.io": {},
             "todos": service.ToDo.responses([item])
         })
@@ -2798,7 +2693,7 @@ class TestToDo(TestRest):
         mock_notify.assert_called_with({
             "kind": "todos",
             "action": "remind",
-            "person": nandyio.unittest.people.MockPerson.model(name="unit"),
+            "person": nandyio_people.Person.model(name="unit"),
             "chore-speech.nandy.io": {"language": "cursing"},
             "todos": service.ToDo.responses([item])
         })
@@ -2882,9 +2777,9 @@ class TestToDo(TestRest):
         self.assertFalse(service.ToDo.unskip(todo))
         mock_notify.assert_called_once()
 
-    @unittest.mock.patch("nandyio.people.Person", nandyio.unittest.people.MockPerson)
+    @unittest.mock.patch("nandyio_people.Person", nandyio_people_unittest.MockPerson)
     @unittest.mock.patch("service.time.time", unittest.mock.MagicMock(return_value=7))
-    @unittest.mock.patch("klotio.service.notify")
+    @unittest.mock.patch("klotio_sqlalchemy_restful.notify")
     def test_complete(self, mock_notify):
 
         area_id = self.sample.area("unit", "test", status="negative").id
@@ -2898,13 +2793,11 @@ class TestToDo(TestRest):
             }
         }).id
 
-        @klotio.service.require_session
+        @klotio_sqlalchemy_restful.session
         def complete():
             todo = self.session.query(models.ToDo).get(flask.request.json["complete"])
-            response = flask.make_response(json.dumps({"complete": service.ToDo.complete(todo)}))
+            response = {"complete": service.ToDo.complete(todo)}
             flask.request.session.commit()
-            response.headers.set('Content-Type', 'application/json')
-            response.status_code = 200
             return response
 
         self.app.add_url_rule('/complete/todo', 'complete', complete)
@@ -2929,19 +2822,19 @@ class TestToDo(TestRest):
             "kind": "todo",
             "action": "complete",
             "todo": service.ToDo.response(todo),
-            "person": nandyio.unittest.people.MockPerson.model(name="unit")
+            "person": nandyio_people.Person.model(name="unit")
         })
         self.assertEqual(mock_notify.call_args_list[1].args[0], {
             "kind": "area",
             "action": "right",
             "area": service.Area.response(area),
-            "person": nandyio.unittest.people.MockPerson.model(name="unit")
+            "person": nandyio_people.Person.model(name="unit")
         })
         self.assertEqual(mock_notify.call_args_list[2].args[0], {
             "kind": "act",
             "action": "create",
             "act": service.Act.response(act),
-            "person": nandyio.unittest.people.MockPerson.model(name="unit")
+            "person": nandyio_people.Person.model(name="unit")
         })
 
         self.assertFalse(self.api.get("/complete/todo", json={"complete": todo_id}).json["complete"])
@@ -3020,39 +2913,20 @@ class TestToDo(TestRest):
 
 class TestToDoCL(TestRest):
 
-    @unittest.mock.patch("nandyio.people.Person", nandyio.unittest.people.MockPerson)
-    @unittest.mock.patch("glob.glob")
-    @unittest.mock.patch("service.open", create=True)
-    @unittest.mock.patch("klotio.service.open", create=True)
-    def test_fields(self, mock_klotio_open, mock_open, mock_glob):
+    @unittest.mock.patch("nandyio_people.Person", nandyio_people_unittest.MockPerson)
+    @unittest.mock.patch("klotio.integrations", klotio_unittest.MockIntegrations())
+    def test_fields(self):
 
-        def glob(pattern):
-
-            if pattern == "/opt/service/config/integration_*_todo.fields.yaml":
-                return ["/opt/service/config/integration_unit.test_todo.fields.yaml"]
-
-            return []
-
-        mock_glob.side_effect = glob
-
-        mock_open.side_effect = [
-            unittest.mock.mock_open(read_data=yaml.safe_dump({"description": "integrate"})).return_value
-        ]
-
-        mock_klotio_open.side_effect = [
-            unittest.mock.mock_open(read_data=yaml.safe_dump({"description": "integrate"})).return_value,
-            unittest.mock.mock_open(read_data=yaml.safe_dump({"description": "integrate"})).return_value
-        ]
+        klotio.integrations.add("todo", {
+            "name": "unit.test",
+            "description": "integrate"
+        })
 
         template_id = self.sample.template("test", "todo", {"a": 1}).id
 
-        @klotio.service.require_session
+        @klotio_sqlalchemy_restful.session
         def blank_fields():
-
-            response = flask.make_response(json.dumps({"fields": service.ToDoCL.fields().to_list()}))
-            response.headers.set('Content-Type', 'application/json')
-            response.status_code = 200
-            return response
+            return {"fields": service.ToDoCL.fields().to_list()}
 
         self.app.add_url_rule('/blank_fields/todocl', 'blank_fields', blank_fields)
 
@@ -3101,15 +2975,9 @@ class TestToDoCL(TestRest):
             }
         ])
 
-        mock_klotio_open.assert_called_once_with("/opt/service/config/integration_unit.test_todo.fields.yaml", "r")
-
-        @klotio.service.require_session
+        @klotio_sqlalchemy_restful.session
         def template_fields():
-
-            response = flask.make_response(json.dumps({"fields": service.ToDoCL.fields({"template_id": template_id}).to_list()}))
-            response.headers.set('Content-Type', 'application/json')
-            response.status_code = 200
-            return response
+            return {"fields": service.ToDoCL.fields({"template_id": template_id}).to_list()}
 
         self.app.add_url_rule('/template_fields/todocl', 'template_fields', template_fields)
 
@@ -3161,9 +3029,7 @@ class TestToDoCL(TestRest):
             }
         ])
 
-        mock_open.assert_called_once_with("/opt/service/config/integration_unit.test_todo.fields.yaml", "r")
-
-    @unittest.mock.patch("nandyio.people.Person", nandyio.unittest.people.MockPerson)
+    @unittest.mock.patch("nandyio_people.Person", nandyio_people_unittest.MockPerson)
     def test_options(self):
 
         template_id = self.sample.template("test", "todo", {"a": 1}).id
@@ -3313,7 +3179,7 @@ class TestToDoCL(TestRest):
             }
         ])
 
-    @unittest.mock.patch("nandyio.people.Person", nandyio.unittest.people.MockPerson)
+    @unittest.mock.patch("nandyio_people.Person", nandyio_people_unittest.MockPerson)
     @unittest.mock.patch("service.time.time", unittest.mock.MagicMock(return_value=7))
     def test_post(self):
 
@@ -3361,9 +3227,9 @@ class TestToDoCL(TestRest):
             }
         ])
 
-    @unittest.mock.patch("nandyio.people.Person", nandyio.unittest.people.MockPerson)
+    @unittest.mock.patch("nandyio_people.Person", nandyio_people_unittest.MockPerson)
     @unittest.mock.patch("service.time.time", unittest.mock.MagicMock(return_value=7))
-    @unittest.mock.patch("klotio.service.notify", unittest.mock.MagicMock)
+    @unittest.mock.patch("klotio_sqlalchemy_restful.notify", unittest.mock.MagicMock)
     def test_patch(self):
 
         todo_id = self.sample.todo("unit", "hey", data={
@@ -3381,31 +3247,18 @@ class TestToDoCL(TestRest):
 
 class TestToDoRUD(TestRest):
 
-    @unittest.mock.patch("nandyio.people.Person", nandyio.unittest.people.MockPerson)
-    @unittest.mock.patch("glob.glob")
-    @unittest.mock.patch("klotio.service.open", create=True)
-    def test_fields(self, mock_open, mock_glob):
+    @unittest.mock.patch("nandyio_people.Person", nandyio_people_unittest.MockPerson)
+    @unittest.mock.patch("klotio.integrations", klotio_unittest.MockIntegrations())
+    def test_fields(self):
 
-        def glob(pattern):
+        klotio.integrations.add("todo", {
+            "name": "unit.test",
+            "description": "integrate"
+        })
 
-            if pattern == "/opt/service/config/integration_*_todo.fields.yaml":
-                return ["/opt/service/config/integration_unit.test_todo.fields.yaml"]
-
-            return []
-
-        mock_glob.side_effect = glob
-
-        mock_open.side_effect = [
-            unittest.mock.mock_open(read_data=yaml.safe_dump({"description": "integrate"})).return_value
-        ]
-
-        @klotio.service.require_session
+        @klotio_sqlalchemy_restful.session
         def fields():
-
-            response = flask.make_response(json.dumps({"fields": service.ToDoRUD.fields().to_list()}))
-            response.headers.set('Content-Type', 'application/json')
-            response.status_code = 200
-            return response
+            return {"fields": service.ToDoRUD.fields().to_list()}
 
         self.app.add_url_rule('/fields/todorud', 'fields', fields)
 
@@ -3459,9 +3312,7 @@ class TestToDoRUD(TestRest):
             }
         ])
 
-        mock_open.assert_called_once_with("/opt/service/config/integration_unit.test_todo.fields.yaml", "r")
-
-    @unittest.mock.patch("nandyio.people.Person", nandyio.unittest.people.MockPerson)
+    @unittest.mock.patch("nandyio_people.Person", nandyio_people_unittest.MockPerson)
     def test_options(self):
 
         todo_id = self.sample.todo("unit", "test", status="opened", data={"text": 1}).id
@@ -3693,7 +3544,7 @@ class TestToDoRUD(TestRest):
 
 class TestToDoA(TestRest):
 
-    @unittest.mock.patch("nandyio.people.Person", nandyio.unittest.people.MockPerson)
+    @unittest.mock.patch("nandyio_people.Person", nandyio_people_unittest.MockPerson)
     @unittest.mock.patch("service.time.time", unittest.mock.MagicMock(return_value=7))
     def test_patch(self):
 
@@ -3774,16 +3625,13 @@ class TestToDoA(TestRest):
 
 class TestRoutine(TestRest):
 
-    @unittest.mock.patch("nandyio.people.Person", nandyio.unittest.people.MockPerson)
+    @unittest.mock.patch("nandyio_people.Person", nandyio_people_unittest.MockPerson)
     @unittest.mock.patch("service.time.time", unittest.mock.MagicMock(return_value=7))
     def test_build(self):
 
-        @klotio.service.require_session
+        @klotio_sqlalchemy_restful.session
         def build():
-            response = flask.make_response(json.dumps({"build": service.Routine.build(**flask.request.json)}))
-            response.headers.set('Content-Type', 'application/json')
-            response.status_code = 200
-            return response
+            return {"build": service.Routine.build(**flask.request.json)}
 
         self.app.add_url_rule('/build/routine', 'build', build)
 
@@ -3874,7 +3722,7 @@ class TestRoutine(TestRest):
             }
         })
 
-    @unittest.mock.patch("nandyio.people.Person", nandyio.unittest.people.MockPerson)
+    @unittest.mock.patch("nandyio_people.Person", nandyio_people_unittest.MockPerson)
     @unittest.mock.patch("service.time.time", unittest.mock.MagicMock(return_value=7))
     def test_tasks(self):
 
@@ -3882,7 +3730,7 @@ class TestRoutine(TestRest):
         self.sample.todo("unit", status="closed")
         self.sample.todo("test")
 
-        @klotio.service.require_session
+        @klotio_sqlalchemy_restful.session
         def tasks():
             response = flask.make_response(json.dumps({"tasks": service.Routine.tasks(service.Routine.build(**flask.request.json))}))
             response.headers.set('Content-Type', 'application/json')
@@ -3931,9 +3779,9 @@ class TestRoutine(TestRest):
             }
         })
 
-    @unittest.mock.patch("nandyio.people.Person", nandyio.unittest.people.MockPerson)
+    @unittest.mock.patch("nandyio_people.Person", nandyio_people_unittest.MockPerson)
     @unittest.mock.patch("service.time.time", unittest.mock.MagicMock(return_value=7))
-    @unittest.mock.patch("klotio.service.notify")
+    @unittest.mock.patch("klotio_sqlalchemy_restful.notify")
     def test_notify(self, mock_notify):
 
         model = self.sample.routine("unit", "test")
@@ -3947,12 +3795,12 @@ class TestRoutine(TestRest):
             "kind": "routine",
             "action": "test",
             "routine": service.Routine.response(model),
-            "person": nandyio.unittest.people.MockPerson.model(name="unit")
+            "person": nandyio_people.Person.model(name="unit")
         })
 
-    @unittest.mock.patch("nandyio.people.Person", nandyio.unittest.people.MockPerson)
+    @unittest.mock.patch("nandyio_people.Person", nandyio_people_unittest.MockPerson)
     @unittest.mock.patch("service.time.time", unittest.mock.MagicMock(return_value=7))
-    @unittest.mock.patch("klotio.service.notify")
+    @unittest.mock.patch("klotio_sqlalchemy_restful.notify")
     def test_check(self, mock_notify):
 
         routine = self.sample.routine("unit", "hey", data={
@@ -3982,7 +3830,7 @@ class TestRoutine(TestRest):
             "action": "start",
             "task": routine.data["tasks"][0],
             "routine": service.Routine.response(routine),
-            "person": nandyio.unittest.people.MockPerson.model(name="unit")
+            "person": nandyio_people.Person.model(name="unit")
         })
 
         service.Routine.check(routine)
@@ -3992,7 +3840,7 @@ class TestRoutine(TestRest):
             "action": "start",
             "task": routine.data["tasks"][0],
             "routine": service.Routine.response(routine),
-            "person": nandyio.unittest.people.MockPerson.model(name="unit")
+            "person": nandyio_people.Person.model(name="unit")
         })
 
         routine.data["tasks"][0]["end"] = 0
@@ -4006,7 +3854,7 @@ class TestRoutine(TestRest):
             "action": "pause",
             "task": routine.data["tasks"][1],
             "routine": service.Routine.response(routine),
-            "person": nandyio.unittest.people.MockPerson.model(name="unit")
+            "person": nandyio_people.Person.model(name="unit")
         })
 
         routine.data["tasks"][1]["end"] = 0
@@ -4015,12 +3863,12 @@ class TestRoutine(TestRest):
 
         self.assertEqual(routine.status, "closed")
 
-    @unittest.mock.patch("nandyio.people.Person", nandyio.unittest.people.MockPerson)
+    @unittest.mock.patch("nandyio_people.Person", nandyio_people_unittest.MockPerson)
     @unittest.mock.patch("service.time.time", unittest.mock.MagicMock(return_value=7))
-    @unittest.mock.patch("klotio.service.notify", unittest.mock.MagicMock)
+    @unittest.mock.patch("klotio_sqlalchemy_restful.notify", unittest.mock.MagicMock)
     def test_create(self):
 
-        @klotio.service.require_session
+        @klotio_sqlalchemy_restful.session
         def create():
             item = service.Routine.create(**flask.request.json)
             flask.request.session.commit()
@@ -4062,9 +3910,9 @@ class TestRoutine(TestRest):
                 }]
         })
 
-    @unittest.mock.patch("nandyio.people.Person", nandyio.unittest.people.MockPerson)
+    @unittest.mock.patch("nandyio_people.Person", nandyio_people_unittest.MockPerson)
     @unittest.mock.patch("service.time.time", unittest.mock.MagicMock(return_value=7))
-    @unittest.mock.patch("klotio.service.notify", unittest.mock.MagicMock)
+    @unittest.mock.patch("klotio_sqlalchemy_restful.notify", unittest.mock.MagicMock)
     def test_next(self):
 
         routine = self.sample.routine("unit", "hey", data={
@@ -4231,39 +4079,20 @@ class TestRoutine(TestRest):
 
 class TestRoutineCL(TestRest):
 
-    @unittest.mock.patch("nandyio.people.Person", nandyio.unittest.people.MockPerson)
-    @unittest.mock.patch("glob.glob")
-    @unittest.mock.patch("service.open", create=True)
-    @unittest.mock.patch("klotio.service.open", create=True)
-    def test_fields(self, mock_klotio_open, mock_open, mock_glob):
+    @unittest.mock.patch("nandyio_people.Person", nandyio_people_unittest.MockPerson)
+    @unittest.mock.patch("klotio.integrations", klotio_unittest.MockIntegrations())
+    def test_fields(self):
 
-        def glob(pattern):
-
-            if pattern == "/opt/service/config/integration_*_routine.fields.yaml":
-                return ["/opt/service/config/integration_unit.test_routine.fields.yaml"]
-
-            return []
-
-        mock_glob.side_effect = glob
-
-        mock_open.side_effect = [
-            unittest.mock.mock_open(read_data=yaml.safe_dump({"description": "integrate"})).return_value
-        ]
-
-        mock_klotio_open.side_effect = [
-            unittest.mock.mock_open(read_data=yaml.safe_dump({"description": "integrate"})).return_value,
-            unittest.mock.mock_open(read_data=yaml.safe_dump({"description": "integrate"})).return_value
-        ]
+        klotio.integrations.add("routine", {
+            "name": "unit.test",
+            "description": "integrate"
+        })
 
         template_id = self.sample.template("test", "routine", {"a": 1}).id
 
-        @klotio.service.require_session
+        @klotio_sqlalchemy_restful.session
         def blank_fields():
-
-            response = flask.make_response(json.dumps({"fields": service.RoutineCL.fields().to_list()}))
-            response.headers.set('Content-Type', 'application/json')
-            response.status_code = 200
-            return response
+            return {"fields": service.RoutineCL.fields().to_list()}
 
         self.app.add_url_rule('/blank_fields/routinecl', 'blank_fields', blank_fields)
 
@@ -4312,15 +4141,9 @@ class TestRoutineCL(TestRest):
             }
         ])
 
-        mock_klotio_open.assert_called_once_with("/opt/service/config/integration_unit.test_routine.fields.yaml", "r")
-
-        @klotio.service.require_session
+        @klotio_sqlalchemy_restful.session
         def template_fields():
-
-            response = flask.make_response(json.dumps({"fields": service.RoutineCL.fields({"template_id": template_id}).to_list()}))
-            response.headers.set('Content-Type', 'application/json')
-            response.status_code = 200
-            return response
+            return {"fields": service.RoutineCL.fields({"template_id": template_id}).to_list()}
 
         self.app.add_url_rule('/template_fields/routinecl', 'template_fields', template_fields)
 
@@ -4372,9 +4195,7 @@ class TestRoutineCL(TestRest):
             }
         ])
 
-        mock_open.assert_called_once_with("/opt/service/config/integration_unit.test_routine.fields.yaml", "r")
-
-    @unittest.mock.patch("nandyio.people.Person", nandyio.unittest.people.MockPerson)
+    @unittest.mock.patch("nandyio_people.Person", nandyio_people_unittest.MockPerson)
     def test_options(self):
 
         template_id = self.sample.template("test", "routine", {"a": 1}).id
@@ -4524,7 +4345,7 @@ class TestRoutineCL(TestRest):
             }
         ])
 
-    @unittest.mock.patch("nandyio.people.Person", nandyio.unittest.people.MockPerson)
+    @unittest.mock.patch("nandyio_people.Person", nandyio_people_unittest.MockPerson)
     @unittest.mock.patch("service.time.time", unittest.mock.MagicMock(return_value=7))
     def test_post(self):
 
@@ -4585,31 +4406,18 @@ class TestRoutineCL(TestRest):
 
 class TestRoutineRUD(TestRest):
 
-    @unittest.mock.patch("nandyio.people.Person", nandyio.unittest.people.MockPerson)
-    @unittest.mock.patch("glob.glob")
-    @unittest.mock.patch("klotio.service.open", create=True)
-    def test_fields(self, mock_open, mock_glob):
+    @unittest.mock.patch("nandyio_people.Person", nandyio_people_unittest.MockPerson)
+    @unittest.mock.patch("klotio.integrations", klotio_unittest.MockIntegrations())
+    def test_fields(self):
 
-        def glob(pattern):
+        klotio.integrations.add("routine", {
+            "name": "unit.test",
+            "description": "integrate"
+        })
 
-            if pattern == "/opt/service/config/integration_*_routine.fields.yaml":
-                return ["/opt/service/config/integration_unit.test_routine.fields.yaml"]
-
-            return []
-
-        mock_glob.side_effect = glob
-
-        mock_open.side_effect = [
-            unittest.mock.mock_open(read_data=yaml.safe_dump({"description": "integrate"})).return_value
-        ]
-
-        @klotio.service.require_session
+        @klotio_sqlalchemy_restful.session
         def fields():
-
-            response = flask.make_response(json.dumps({"fields": service.RoutineRUD.fields().to_list()}))
-            response.headers.set('Content-Type', 'application/json')
-            response.status_code = 200
-            return response
+            return {"fields": service.RoutineRUD.fields().to_list()}
 
         self.app.add_url_rule('/fields/routinerud', 'fields', fields)
 
@@ -4663,9 +4471,7 @@ class TestRoutineRUD(TestRest):
             }
         ])
 
-        mock_open.assert_called_once_with("/opt/service/config/integration_unit.test_routine.fields.yaml", "r")
-
-    @unittest.mock.patch("nandyio.people.Person", nandyio.unittest.people.MockPerson)
+    @unittest.mock.patch("nandyio_people.Person", nandyio_people_unittest.MockPerson)
     def test_options(self):
 
         routine_id = self.sample.routine("unit", "test", status="opened", data={"text": 1}).id
@@ -4903,7 +4709,7 @@ class TestRoutineRUD(TestRest):
 
 class TestRoutineA(TestRest):
 
-    @unittest.mock.patch("nandyio.people.Person", nandyio.unittest.people.MockPerson)
+    @unittest.mock.patch("nandyio_people.Person", nandyio_people_unittest.MockPerson)
     @unittest.mock.patch("service.time.time", unittest.mock.MagicMock(return_value=7))
     def test_patch(self):
 
@@ -5002,9 +4808,9 @@ class TestRoutineA(TestRest):
 
 class TestTask(TestRest):
 
-    @unittest.mock.patch("nandyio.people.Person", nandyio.unittest.people.MockPerson)
+    @unittest.mock.patch("nandyio_people.Person", nandyio_people_unittest.MockPerson)
     @unittest.mock.patch("service.time.time", unittest.mock.MagicMock(return_value=7))
-    @unittest.mock.patch("klotio.service.notify")
+    @unittest.mock.patch("klotio_sqlalchemy_restful.notify")
     def test_notify(self, mock_notify):
 
         routine = self.sample.routine("unit", "hey", data={
@@ -5026,7 +4832,7 @@ class TestTask(TestRest):
             "action": "test",
             "task": routine.data["tasks"][0],
             "routine": service.Routine.response(routine),
-            "person": nandyio.unittest.people.MockPerson.model(name="unit")
+            "person": nandyio_people.Person.model(name="unit")
         })
 
     @unittest.mock.patch("service.time.time", unittest.mock.MagicMock(return_value=7))
@@ -5135,9 +4941,9 @@ class TestTask(TestRest):
         mock_task_notify.assert_called_once()
         mock_routine_notify.assert_called_once()
 
-    @unittest.mock.patch("nandyio.people.Person", nandyio.unittest.people.MockPerson)
+    @unittest.mock.patch("nandyio_people.Person", nandyio_people_unittest.MockPerson)
     @unittest.mock.patch("service.time.time", unittest.mock.MagicMock(return_value=7))
-    @unittest.mock.patch("klotio.service.notify")
+    @unittest.mock.patch("klotio_sqlalchemy_restful.notify")
     def test_complete(self, mock_notify):
 
         todo = self.sample.todo("unit")
@@ -5151,13 +4957,11 @@ class TestTask(TestRest):
             }]
         }).id
 
-        @klotio.service.require_session
+        @klotio_sqlalchemy_restful.session
         def complete():
             routine = self.session.query(models.Routine).get(flask.request.json["complete"])
-            response = flask.make_response(json.dumps({"complete": service.Task.complete(routine.data["tasks"][0], routine)}))
+            response = {"complete": service.Task.complete(routine.data["tasks"][0], routine)}
             flask.request.session.commit()
-            response.headers.set('Content-Type', 'application/json')
-            response.status_code = 200
             return response
 
         self.app.add_url_rule('/complete/task', 'complete', complete)
@@ -5202,20 +5006,20 @@ class TestTask(TestRest):
                 "text": "do it",
                 "todo": 1
             },
-            "person": nandyio.unittest.people.MockPerson.model(name="unit")
+            "person": nandyio_people.Person.model(name="unit")
         })
         self.assertEqual(mock_notify.call_args_list[1].args[0], {
             "kind": "routine",
             "action": "complete",
             "routine": service.Routine.response(routine),
-            "person": nandyio.unittest.people.MockPerson.model(name="unit")
+            "person": nandyio_people.Person.model(name="unit")
         })
 
         self.assertFalse(self.api.get("/complete/task", json={"complete": routine_id}).json["complete"])
 
-    @unittest.mock.patch("nandyio.people.Person", nandyio.unittest.people.MockPerson)
+    @unittest.mock.patch("nandyio_people.Person", nandyio_people_unittest.MockPerson)
     @unittest.mock.patch("service.time.time", unittest.mock.MagicMock(return_value=7))
-    @unittest.mock.patch("klotio.service.notify")
+    @unittest.mock.patch("klotio_sqlalchemy_restful.notify")
     def test_uncomplete(self, mock_notify):
 
         todo = self.sample.todo("unit", status="closed", data={"end": 0})
@@ -5231,13 +5035,11 @@ class TestTask(TestRest):
             }]
         }).id
 
-        @klotio.service.require_session
+        @klotio_sqlalchemy_restful.session
         def uncomplete():
             routine = self.session.query(models.Routine).get(flask.request.json["uncomplete"])
-            response = flask.make_response(json.dumps({"uncomplete": service.Task.uncomplete(routine.data["tasks"][0], routine)}))
+            response = {"uncomplete": service.Task.uncomplete(routine.data["tasks"][0], routine)}
             flask.request.session.commit()
-            response.headers.set('Content-Type', 'application/json')
-            response.status_code = 200
             return response
 
         self.app.add_url_rule('/uncomplete/task', 'uncomplete', uncomplete)
@@ -5283,20 +5085,20 @@ class TestTask(TestRest):
                 "text": "do it",
                 "todo": 1
             },
-            "person": nandyio.unittest.people.MockPerson.model(name="unit")
+            "person": nandyio_people.Person.model(name="unit")
         })
         self.assertEqual(mock_notify.call_args_list[1].args[0], {
             "kind": "routine",
             "action": "uncomplete",
             "routine": service.Routine.response(routine),
-            "person": nandyio.unittest.people.MockPerson.model(name="unit")
+            "person": nandyio_people.Person.model(name="unit")
         })
 
         self.assertFalse(self.api.get("/uncomplete/task", json={"uncomplete": routine_id}).json["uncomplete"])
 
 class TestTaskA(TestRest):
 
-    @unittest.mock.patch("nandyio.people.Person", nandyio.unittest.people.MockPerson)
+    @unittest.mock.patch("nandyio_people.Person", nandyio_people_unittest.MockPerson)
     @unittest.mock.patch("service.time.time", unittest.mock.MagicMock(return_value=7))
     def test_patch(self):
 

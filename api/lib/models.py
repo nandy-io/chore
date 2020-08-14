@@ -4,9 +4,9 @@ import sqlalchemy
 import sqlalchemy.ext.mutable
 import sqlalchemy_jsonfield
 
-import klotio.models
+import klotio_sqlalchemy_models
 
-class MySQL(klotio.models.MySQL):
+class MySQL(klotio_sqlalchemy_models.MySQL):
 
     DATABASE = "nandy_chore"
 
