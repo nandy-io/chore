@@ -1,4 +1,4 @@
-FROM klotio/sqlalchemy:0.1
+FROM klotio/sqlalchemy:0.2
 
 COPY requirements.txt .
 
@@ -15,7 +15,3 @@ RUN apk add --no-cache --virtual .pip-deps  \
 
 COPY bin bin
 COPY lib lib
-
-ENV PYTHONPATH "/opt/service/lib:/opt/service/test:${PYTHONPATH}"
-
-CMD "/opt/service/bin/api.py"

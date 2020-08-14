@@ -16,8 +16,10 @@ import sqlalchemy.exc
 import opengui
 
 import models
-import klotio.service
-import nandyio.people
+import klotio
+import klotio_flask_restful
+import klotio_sqlalchemy_restful
+import nandyio_people
 
 def app():
 
@@ -30,7 +32,7 @@ def app():
 
     api = flask_restful.Api(app)
 
-    api.add_resource(klotio.service.Health, '/health')
+    api.add_resource(klotio_flask_restful.Health, '/health')
     api.add_resource(Group, '/group')
     api.add_resource(TemplateCL, '/template')
     api.add_resource(TemplateRUD, '/template/<int:id>')
@@ -51,11 +53,11 @@ def app():
     return app
 
 
-class Group(klotio.service.Group):
+class Group(klotio_flask_restful.Group):
     APP = "chore.nandy.io"
 
 
-class Template(klotio.service.Model):
+class Template(klotio_sqlalchemy_restful.Model):
 
     SINGULAR = "template"
     PLURAL = "templates"
@@ -85,9 +87,7 @@ class Template(klotio.service.Model):
         integrations = []
 
         if form in ["template", "area", "act", "todo", "routine"]:
-            for integration_path in sorted(glob.glob(f"/opt/service/config/integration_*_{form}.fields.yaml")):
-                with open(integration_path, "r") as integration_file:
-                    integrations.append(cls.integrate({**{"name": integration_path.split("_")[1], **yaml.safe_load(integration_file)}}))
+            integrations.extend(klotio.integrations(form))
 
         return integrations
 
@@ -170,14 +170,14 @@ class Template(klotio.service.Model):
 
         return "template"
 
-class TemplateCL(Template, klotio.service.RestCL):
+class TemplateCL(Template, klotio_sqlalchemy_restful.RestCL):
 
     @classmethod
     def fields(cls, values=None, originals=None):
 
         return opengui.Fields(values, originals=originals, fields=copy.deepcopy(cls.FIELDS + cls.integrations(cls.form(values, originals)) + cls.YAML))
 
-class TemplateRUD(Template, klotio.service.RestRUD):
+class TemplateRUD(Template, klotio_sqlalchemy_restful.RestRUD):
 
     @classmethod
     def fields(cls, values=None, originals=None):
@@ -186,7 +186,7 @@ class TemplateRUD(Template, klotio.service.RestRUD):
 
 
 
-class Status(klotio.service.Model):
+class Status(klotio_sqlalchemy_restful.Model):
 
     @classmethod
     def build(cls, **kwargs):
@@ -237,7 +237,7 @@ class Status(klotio.service.Model):
         person = kwargs.get("person", fields["data"].get("person"))
 
         if person:
-            fields["person_id"] = nandyio.people.Person.model(name=person)["id"]
+            fields["person_id"] = nandyio_people.Person.model(name=person)["id"]
 
         for field in ["person_id", "name", "status", "created", "updated"]:
             if field in kwargs:
@@ -256,11 +256,11 @@ class Status(klotio.service.Model):
         model.data["notified"] = time.time()
         model.updated = time.time()
 
-        klotio.service.notify({
+        klotio_sqlalchemy_restful.notify({
             "kind": cls.SINGULAR,
             "action": action,
             cls.SINGULAR: cls.response(model),
-            "person": nandyio.people.Person.model(id=model.person_id)
+            "person": nandyio_people.Person.model(id=model.person_id)
         })
 
     @classmethod
@@ -275,7 +275,7 @@ class Status(klotio.service.Model):
         return model
 
 
-class StatusCL(klotio.service.RestCL):
+class StatusCL(klotio_sqlalchemy_restful.RestCL):
 
     FIELDS = [
         {
@@ -297,7 +297,7 @@ class StatusCL(klotio.service.RestCL):
     @classmethod
     def fields(cls, values=None, originals=None):
 
-        fields = opengui.Fields(values, originals=originals, fields=nandyio.people.Person.fields() + cls.FIELDS + cls.integrations() + cls.YAML)
+        fields = opengui.Fields(values, originals=originals, fields=nandyio_people.Person.fields() + cls.FIELDS + cls.integrations() + cls.YAML)
 
         fields["status"].options = cls.STATUSES
         fields["template_id"].options, fields["template_id"].content["labels"] = Template.choices(cls.SINGULAR)
@@ -311,14 +311,14 @@ class StatusCL(klotio.service.RestCL):
 
         return fields
 
-    @klotio.service.require_session
+    @klotio_sqlalchemy_restful.session
     def post(self):
 
         model = self.create(**self.request(flask.request.json[self.SINGULAR]))
 
         return {self.SINGULAR: self.response(model)}, 201
 
-    @klotio.service.require_session
+    @klotio_sqlalchemy_restful.session
     def get(self):
 
         since = None
@@ -349,7 +349,7 @@ class StatusCL(klotio.service.RestCL):
 
         return {self.PLURAL: self.responses(models)}
 
-class StatusRUD(klotio.service.RestRUD):
+class StatusRUD(klotio_sqlalchemy_restful.RestRUD):
 
     FIELDS = [
         {
@@ -374,7 +374,7 @@ class StatusRUD(klotio.service.RestRUD):
     @classmethod
     def fields(cls, values=None, originals=None):
 
-        fields = opengui.Fields(values, originals=originals, fields=cls.ID + nandyio.people.Person.fields() + cls.FIELDS + cls.integrations() + cls.YAML)
+        fields = opengui.Fields(values, originals=originals, fields=cls.ID + nandyio_people.Person.fields() + cls.FIELDS + cls.integrations() + cls.YAML)
 
         fields["status"].options = cls.STATUSES
 
@@ -382,7 +382,7 @@ class StatusRUD(klotio.service.RestRUD):
 
 class StatusA(flask_restful.Resource):
 
-    @klotio.service.require_session
+    @klotio_sqlalchemy_restful.session
     def patch(self, id, action):
 
         model = flask.request.session.query(self.MODEL).get(id)
@@ -668,9 +668,9 @@ class ToDo(State):
         """
 
         if "person" in data:
-            person = nandyio.people.Person.model(name=data["person"])
+            person = nandyio_people.Person.model(name=data["person"])
         else:
-            person = nandyio.people.Person.model(id=data["person_id"])
+            person = nandyio_people.Person.model(id=data["person_id"])
 
         updated = False
 
@@ -691,7 +691,7 @@ class ToDo(State):
 
         if todos:
 
-            klotio.service.notify({
+            klotio_sqlalchemy_restful.notify({
                 "kind": "todos",
                 "action": "remind",
                 "person": person,
@@ -736,7 +736,7 @@ class ToDo(State):
 
 class ToDoCL(ToDo, StatusCL):
 
-    @klotio.service.require_session
+    @klotio_sqlalchemy_restful.session
     def patch(self):
 
         updated = ToDo.todos(flask.request.json["todos"])
@@ -889,12 +889,12 @@ class Task:
         routine.updated = time.time()
         task["notified"] = time.time()
 
-        klotio.service.notify({
+        klotio_sqlalchemy_restful.notify({
             "kind": "task",
             "action": action,
             "task": task,
             "routine": Routine.response(routine),
-            "person": nandyio.people.Person.model(id=routine.person_id)
+            "person": nandyio_people.Person.model(id=routine.person_id)
         })
 
     @classmethod
@@ -1027,7 +1027,7 @@ class Task:
 
 class TaskA(Task, flask_restful.Resource):
 
-    @klotio.service.require_session
+    @klotio_sqlalchemy_restful.session
     def patch(self, routine_id, task_id, action):
 
         routine = flask.request.session.query(models.Routine).get(routine_id)

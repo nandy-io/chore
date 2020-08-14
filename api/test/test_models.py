@@ -1,6 +1,6 @@
 import unittest
 import unittest.mock
-import nandyio.unittest.people
+import nandyio_people_unittest
 
 import os
 import time
@@ -31,7 +31,7 @@ class Sample:
     def area(self, person, name, status=None, created=7, updated=8, data=None):
 
         area = models.Area(
-            person_id=nandyio.unittest.people.MockPerson.model(name=person)["id"],
+            person_id=nandyio_people_unittest.MockPerson.model(name=person)["id"],
             name=name,
             status=status,
             created=created,
@@ -46,7 +46,7 @@ class Sample:
     def act(self, person, name="Unit", status=None, created=7, updated=8, data=None):
 
         act = models.Act(
-            person_id=nandyio.unittest.people.MockPerson.model(name=person)["id"],
+            person_id=nandyio_people_unittest.MockPerson.model(name=person)["id"],
             name=name,
             status=status,
             created=created,
@@ -70,7 +70,7 @@ class Sample:
         base.update(data)
 
         todo = models.ToDo(
-            person_id=nandyio.unittest.people.MockPerson.model(name=person)["id"],
+            person_id=nandyio_people_unittest.MockPerson.model(name=person)["id"],
             name=name,
             status=status,
             created=created,
@@ -98,7 +98,7 @@ class Sample:
             base["tasks"] = tasks
 
         routine = models.Routine(
-            person_id=nandyio.unittest.people.MockPerson.model(name=person)["id"],
+            person_id=nandyio_people_unittest.MockPerson.model(name=person)["id"],
             name=name,
             status=status,
             created=created,
