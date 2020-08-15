@@ -36,7 +36,7 @@ class TestService(klotio_unittest.TestCase):
         self.assertLogged(daemon.logger, "debug", "init", extra={
             "init": {
                 "sleep": 0.7,
-                "chore": "http://toast.com"
+                "chore_api": "http://toast.com"
             }
         })
 
