@@ -1,5 +1,6 @@
 import unittest
 import unittest.mock
+import klotio_unittest
 
 import os
 import json
@@ -7,12 +8,13 @@ import json
 import service
 
 
-class TestService(unittest.TestCase):
+class TestService(klotio_unittest.TestCase):
 
     @unittest.mock.patch.dict(os.environ, {
         "CHORE_API": "http://toast.com",
         "SLEEP": "0.7"
     })
+    @unittest.mock.patch("klotio.logger", klotio_unittest.MockLogger)
     def setUp(self):
 
         self.daemon = service.Daemon()
@@ -21,12 +23,22 @@ class TestService(unittest.TestCase):
         "CHORE_API": "http://toast.com",
         "SLEEP": "0.7"
     })
+    @unittest.mock.patch("klotio.logger", klotio_unittest.MockLogger)
     def test___init___(self):
 
         daemon = service.Daemon()
 
         self.assertEqual(daemon.chore, "http://toast.com")
         self.assertEqual(daemon.sleep, 0.7)
+
+        self.assertEqual(daemon.logger.name, "nandy-io-chore-daemon")
+
+        self.assertLogged(daemon.logger, "debug", "init", extra={
+            "init": {
+                "sleep": 0.7,
+                "chore": "http://toast.com"
+            }
+        })
 
     @unittest.mock.patch("service.time.time", unittest.mock.MagicMock(return_value=7))
     def test_expire(self):
@@ -100,6 +112,20 @@ class TestService(unittest.TestCase):
             unittest.mock.call().raise_for_status()
         ])
 
+        self.assertLogged(self.daemon.logger, "info", "task", extra={
+            "task": {
+                "id": 0,
+                "start": 0,
+                "delay": 6,
+                "start": 1,
+                "paused": False,
+                "interval": 2,
+                "notified": 4
+            }
+        })
+
+        self.assertLogged(self.daemon.logger, "info", "remind")
+
         routine["data"]["tasks"][0]["notified"] = 7
         self.daemon.tasks(routine)
         mock_patch.assert_called_once()
@@ -127,6 +153,18 @@ class TestService(unittest.TestCase):
             unittest.mock.call("http://toast.com/routine/1/expire"),
             unittest.mock.call().raise_for_status(),
         ])
+
+        self.assertLogged(self.daemon.logger, "info", "routine", extra={
+            "routine": {
+                "id": 1,
+                "data": {
+                    "start": 0,
+                    "expires": 6
+                }
+            }
+        })
+
+        self.assertLogged(self.daemon.logger, "info", "expire")
 
         routine =  {
             "id": 1,
@@ -163,6 +201,8 @@ class TestService(unittest.TestCase):
             unittest.mock.call("http://toast.com/routine/1/task/0/remind"),
             unittest.mock.call().raise_for_status()
         ])
+
+        self.assertLogged(self.daemon.logger, "info", "expire")
 
         routine["data"]["notified"] = 7
         routine["data"]["tasks"][0]["notified"] = 7

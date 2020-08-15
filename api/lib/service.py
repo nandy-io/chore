@@ -15,19 +15,20 @@ import sqlalchemy.exc
 
 import opengui
 
-import models
+
 import klotio
 import klotio_flask_restful
 import klotio_sqlalchemy_restful
-import nandyio_people
+import nandyio_people_integrations
+import nandyio_chore_models
 
 def app():
 
-    app = flask.Flask("nandy-io-speech-api")
+    app = flask.Flask("nandy-io-chore-api")
 
-    app.mysql = models.MySQL()
+    app.mysql = nandyio_chore_models.MySQL()
 
-    app.redis = redis.StrictRedis(host=os.environ['REDIS_HOST'], port=int(os.environ['REDIS_PORT']))
+    app.redis = redis.Redis(host=os.environ['REDIS_HOST'], port=int(os.environ['REDIS_PORT']))
     app.channel = os.environ['REDIS_CHANNEL']
 
     api = flask_restful.Api(app)
@@ -50,6 +51,20 @@ def app():
     api.add_resource(RoutineA, '/routine/<int:id>/<action>')
     api.add_resource(TaskA, '/routine/<int:routine_id>/task/<int:task_id>/<action>')
 
+    app.logger = klotio.logger(app.name)
+
+    app.logger.debug("init", extra={
+        "init": {
+            "redis": {
+                "connection": str(app.redis),
+                "channel": app.channel
+            },
+            "mysql": {
+                "connection": str(app.mysql.engine.url)
+            }
+        }
+    })
+
     return app
 
 
@@ -61,8 +76,8 @@ class Template(klotio_sqlalchemy_restful.Model):
 
     SINGULAR = "template"
     PLURAL = "templates"
-    MODEL = models.Template
-    ORDER = [models.Template.name]
+    MODEL = nandyio_chore_models.Template
+    ORDER = [nandyio_chore_models.Template.name]
 
     FIELDS = [
         {
@@ -170,14 +185,14 @@ class Template(klotio_sqlalchemy_restful.Model):
 
         return "template"
 
-class TemplateCL(Template, klotio_sqlalchemy_restful.RestCL):
+class TemplateCL(Template, klotio_sqlalchemy_restful.ModelCL):
 
     @classmethod
     def fields(cls, values=None, originals=None):
 
         return opengui.Fields(values, originals=originals, fields=copy.deepcopy(cls.FIELDS + cls.integrations(cls.form(values, originals)) + cls.YAML))
 
-class TemplateRUD(Template, klotio_sqlalchemy_restful.RestRUD):
+class TemplateRUD(Template, klotio_sqlalchemy_restful.ModelRUD):
 
     @classmethod
     def fields(cls, values=None, originals=None):
@@ -210,14 +225,14 @@ class Status(klotio_sqlalchemy_restful.Model):
 
             if "template_id" in kwargs:
                 template = flask.request.session.query(
-                    models.Template
+                    nandyio_chore_models.Template
                 ).get(
                     kwargs["template_id"]
                 )
 
             elif "template" in kwargs:
                 template = flask.request.session.query(
-                    models.Template
+                    nandyio_chore_models.Template
                 ).filter_by(
                     kind=cls.SINGULAR,
                     name=kwargs["template"]
@@ -237,7 +252,7 @@ class Status(klotio_sqlalchemy_restful.Model):
         person = kwargs.get("person", fields["data"].get("person"))
 
         if person:
-            fields["person_id"] = nandyio_people.Person.model(name=person)["id"]
+            fields["person_id"] = nandyio_people_integrations.Person.model(name=person)["id"]
 
         for field in ["person_id", "name", "status", "created", "updated"]:
             if field in kwargs:
@@ -260,7 +275,7 @@ class Status(klotio_sqlalchemy_restful.Model):
             "kind": cls.SINGULAR,
             "action": action,
             cls.SINGULAR: cls.response(model),
-            "person": nandyio_people.Person.model(id=model.person_id)
+            "person": nandyio_people_integrations.Person.model(id=model.person_id)
         })
 
     @classmethod
@@ -275,7 +290,7 @@ class Status(klotio_sqlalchemy_restful.Model):
         return model
 
 
-class StatusCL(klotio_sqlalchemy_restful.RestCL):
+class StatusCL(klotio_sqlalchemy_restful.ModelCL):
 
     FIELDS = [
         {
@@ -297,7 +312,7 @@ class StatusCL(klotio_sqlalchemy_restful.RestCL):
     @classmethod
     def fields(cls, values=None, originals=None):
 
-        fields = opengui.Fields(values, originals=originals, fields=nandyio_people.Person.fields() + cls.FIELDS + cls.integrations() + cls.YAML)
+        fields = opengui.Fields(values, originals=originals, fields=nandyio_people_integrations.Person.fields() + cls.FIELDS + cls.integrations() + cls.YAML)
 
         fields["status"].options = cls.STATUSES
         fields["template_id"].options, fields["template_id"].content["labels"] = Template.choices(cls.SINGULAR)
@@ -311,6 +326,7 @@ class StatusCL(klotio_sqlalchemy_restful.RestCL):
 
         return fields
 
+    @klotio_flask_restful.logger
     @klotio_sqlalchemy_restful.session
     def post(self):
 
@@ -318,6 +334,7 @@ class StatusCL(klotio_sqlalchemy_restful.RestCL):
 
         return {self.SINGULAR: self.response(model)}, 201
 
+    @klotio_flask_restful.logger
     @klotio_sqlalchemy_restful.session
     def get(self):
 
@@ -349,7 +366,7 @@ class StatusCL(klotio_sqlalchemy_restful.RestCL):
 
         return {self.PLURAL: self.responses(models)}
 
-class StatusRUD(klotio_sqlalchemy_restful.RestRUD):
+class StatusRUD(klotio_sqlalchemy_restful.ModelRUD):
 
     FIELDS = [
         {
@@ -374,7 +391,7 @@ class StatusRUD(klotio_sqlalchemy_restful.RestRUD):
     @classmethod
     def fields(cls, values=None, originals=None):
 
-        fields = opengui.Fields(values, originals=originals, fields=cls.ID + nandyio_people.Person.fields() + cls.FIELDS + cls.integrations() + cls.YAML)
+        fields = opengui.Fields(values, originals=originals, fields=cls.ID + nandyio_people_integrations.Person.fields() + cls.FIELDS + cls.integrations() + cls.YAML)
 
         fields["status"].options = cls.STATUSES
 
@@ -382,6 +399,7 @@ class StatusRUD(klotio_sqlalchemy_restful.RestRUD):
 
 class StatusA(flask_restful.Resource):
 
+    @klotio_flask_restful.logger
     @klotio_sqlalchemy_restful.session
     def patch(self, id, action):
 
@@ -437,8 +455,8 @@ class Area(Value):
 
     SINGULAR = "area"
     PLURAL = "areas"
-    MODEL = models.Area
-    ORDER = [models.Area.name]
+    MODEL = nandyio_chore_models.Area
+    ORDER = [nandyio_chore_models.Area.name]
 
     @classmethod
     def wrong(cls, model):
@@ -472,8 +490,8 @@ class Act(Value):
 
     SINGULAR = "act"
     PLURAL = "acts"
-    MODEL = models.Act
-    ORDER = [models.Act.created.desc()]
+    MODEL = nandyio_chore_models.Act
+    ORDER = [nandyio_chore_models.Act.created.desc()]
 
     @classmethod
     def create(cls, **kwargs):
@@ -658,8 +676,8 @@ class ToDo(State):
 
     SINGULAR = "todo"
     PLURAL = "todos"
-    MODEL = models.ToDo
-    ORDER = [models.ToDo.created.desc()]
+    MODEL = nandyio_chore_models.ToDo
+    ORDER = [nandyio_chore_models.ToDo.created.desc()]
 
     @classmethod
     def todos(cls, data):
@@ -668,16 +686,16 @@ class ToDo(State):
         """
 
         if "person" in data:
-            person = nandyio_people.Person.model(name=data["person"])
+            person = nandyio_people_integrations.Person.model(name=data["person"])
         else:
-            person = nandyio_people.Person.model(id=data["person_id"])
+            person = nandyio_people_integrations.Person.model(id=data["person_id"])
 
         updated = False
 
         todos = []
 
         for todo in flask.request.session.query(
-            models.ToDo
+            nandyio_chore_models.ToDo
         ).filter_by(
             person_id=person["id"],
             status="opened"
@@ -716,7 +734,7 @@ class ToDo(State):
             cls.notify("complete", model)
 
             if "area" in model.data:
-                Area.right(flask.request.session.query(models.Area).get(model.data["area"]))
+                Area.right(flask.request.session.query(nandyio_chore_models.Area).get(model.data["area"]))
 
             if "act" in model.data:
 
@@ -736,6 +754,7 @@ class ToDo(State):
 
 class ToDoCL(ToDo, StatusCL):
 
+    @klotio_flask_restful.logger
     @klotio_sqlalchemy_restful.session
     def patch(self):
 
@@ -757,8 +776,8 @@ class Routine(State):
 
     SINGULAR = "routine"
     PLURAL = "routines"
-    MODEL = models.Routine
-    ORDER = [models.Routine.created.desc()]
+    MODEL = nandyio_chore_models.Routine
+    ORDER = [nandyio_chore_models.Routine.created.desc()]
     ACTIONS = State.ACTIONS + ["next"]
 
     @staticmethod
@@ -772,7 +791,7 @@ class Routine(State):
             tasks = []
 
             for todo in flask.request.session.query(
-                models.ToDo
+                nandyio_chore_models.ToDo
             ).filter_by(
                 person_id=fields["person_id"],
                 status="opened"
@@ -894,7 +913,7 @@ class Task:
             "action": action,
             "task": task,
             "routine": Routine.response(routine),
-            "person": nandyio_people.Person.model(id=routine.person_id)
+            "person": nandyio_people_integrations.Person.model(id=routine.person_id)
         })
 
     @classmethod
@@ -999,7 +1018,7 @@ class Task:
             Routine.check(routine)
 
             if "todo" in task:
-                ToDo.complete(flask.request.session.query(models.ToDo).get(task["todo"]))
+                ToDo.complete(flask.request.session.query(nandyio_chore_models.ToDo).get(task["todo"]))
 
             return True
 
@@ -1019,7 +1038,7 @@ class Task:
             Routine.uncomplete(routine)
 
             if "todo" in task:
-                ToDo.uncomplete(flask.request.session.query(models.ToDo).get(task["todo"]))
+                ToDo.uncomplete(flask.request.session.query(nandyio_chore_models.ToDo).get(task["todo"]))
 
             return True
 
@@ -1027,10 +1046,11 @@ class Task:
 
 class TaskA(Task, flask_restful.Resource):
 
+    @klotio_flask_restful.logger
     @klotio_sqlalchemy_restful.session
     def patch(self, routine_id, task_id, action):
 
-        routine = flask.request.session.query(models.Routine).get(routine_id)
+        routine = flask.request.session.query(nandyio_chore_models.Routine).get(routine_id)
         task = routine.data["tasks"][task_id]
 
         if action in self.ACTIONS:

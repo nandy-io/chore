@@ -24,3 +24,5 @@ spec:
           value: http://api.chore-nandy-io
         - name: SLEEP
           value: "5"
+        - name: LOG_LEVEL
+          value: WARNING

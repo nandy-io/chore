@@ -11,7 +11,7 @@ import sqlalchemy
 import sqlalchemy.ext.mutable
 import sqlalchemy_jsonfield
 
-import models
+import nandyio_chore_models
 
 
 class Sample:
@@ -22,7 +22,7 @@ class Sample:
 
     def template(self, name, kind, data=None):
 
-        template = models.Template(name=name, kind=kind, data=data)
+        template = nandyio_chore_models.Template(name=name, kind=kind, data=data)
         self.session.add(template)
         self.session.commit()
 
@@ -30,7 +30,7 @@ class Sample:
 
     def area(self, person, name, status=None, created=7, updated=8, data=None):
 
-        area = models.Area(
+        area = nandyio_chore_models.Area(
             person_id=nandyio_people_unittest.MockPerson.model(name=person)["id"],
             name=name,
             status=status,
@@ -45,7 +45,7 @@ class Sample:
 
     def act(self, person, name="Unit", status=None, created=7, updated=8, data=None):
 
-        act = models.Act(
+        act = nandyio_chore_models.Act(
             person_id=nandyio_people_unittest.MockPerson.model(name=person)["id"],
             name=name,
             status=status,
@@ -69,7 +69,7 @@ class Sample:
 
         base.update(data)
 
-        todo = models.ToDo(
+        todo = nandyio_chore_models.ToDo(
             person_id=nandyio_people_unittest.MockPerson.model(name=person)["id"],
             name=name,
             status=status,
@@ -97,7 +97,7 @@ class Sample:
         if tasks is not None:
             base["tasks"] = tasks
 
-        routine = models.Routine(
+        routine = nandyio_chore_models.Routine(
             person_id=nandyio_people_unittest.MockPerson.model(name=person)["id"],
             name=name,
             status=status,
@@ -118,7 +118,7 @@ class TestMySQL(unittest.TestCase):
 
     def setUp(self):
 
-        self.mysql = models.MySQL()
+        self.mysql = nandyio_chore_models.MySQL()
         self.session = self.mysql.session()
         self.mysql.drop_database()
         self.mysql.create_database()
@@ -131,14 +131,14 @@ class TestMySQL(unittest.TestCase):
 
     def test_Template(self):
 
-        self.session.add(models.Template(
+        self.session.add(nandyio_chore_models.Template(
             name='Unit Test',
             kind="routine",
             data={"a": 1}
         ))
         self.session.commit()
 
-        template = self.session.query(models.Template).one()
+        template = self.session.query(nandyio_chore_models.Template).one()
         self.assertEqual(str(template), "<Template(name='Unit Test',kind='routine')>")
         self.assertEqual(template.name, "Unit Test")
         self.assertEqual(template.kind, "routine")
@@ -146,20 +146,20 @@ class TestMySQL(unittest.TestCase):
 
         template.data["a"] = 2
         self.session.commit()
-        template = self.session.query(models.Template).one()
+        template = self.session.query(nandyio_chore_models.Template).one()
         self.assertEqual(template.data, {"a": 2})
 
-    @unittest.mock.patch("models.time.time", unittest.mock.MagicMock(return_value=7))
+    @unittest.mock.patch("nandyio_chore_models.time.time", unittest.mock.MagicMock(return_value=7))
     def test_Area(self):
 
-        self.session.add(models.Area(
+        self.session.add(nandyio_chore_models.Area(
             person_id=1,
             name='Unit Test',
             data={"a": 1}
         ))
         self.session.commit()
 
-        area = self.session.query(models.Area).one()
+        area = self.session.query(nandyio_chore_models.Area).one()
         self.assertEqual(str(area), "<Area(name='Unit Test')>")
         self.assertEqual(area.person_id, 1)
         self.assertEqual(area.name, "Unit Test")
@@ -170,20 +170,20 @@ class TestMySQL(unittest.TestCase):
 
         area.data["a"] = 2
         self.session.commit()
-        area = self.session.query(models.Area).one()
+        area = self.session.query(nandyio_chore_models.Area).one()
         self.assertEqual(area.data, {"a": 2})
 
-    @unittest.mock.patch("models.time.time", unittest.mock.MagicMock(return_value=7))
+    @unittest.mock.patch("nandyio_chore_models.time.time", unittest.mock.MagicMock(return_value=7))
     def test_Act(self):
 
-        self.session.add(models.Act(
+        self.session.add(nandyio_chore_models.Act(
             person_id=1,
             name='Unit Test',
             data={"a": 1}
         ))
         self.session.commit()
 
-        act = self.session.query(models.Act).one()
+        act = self.session.query(nandyio_chore_models.Act).one()
         self.assertEqual(str(act), "<Act(name='Unit Test',person_id=1,created=7)>")
         self.assertEqual(act.person_id, 1)
         self.assertEqual(act.name, "Unit Test")
@@ -194,20 +194,20 @@ class TestMySQL(unittest.TestCase):
 
         act.data["a"] = 2
         self.session.commit()
-        act = self.session.query(models.Act).one()
+        act = self.session.query(nandyio_chore_models.Act).one()
         self.assertEqual(act.data, {"a": 2})
 
-    @unittest.mock.patch("models.time.time", unittest.mock.MagicMock(return_value=7))
+    @unittest.mock.patch("nandyio_chore_models.time.time", unittest.mock.MagicMock(return_value=7))
     def test_Todo(self):
 
-        self.session.add(models.ToDo(
+        self.session.add(nandyio_chore_models.ToDo(
             person_id=1,
             name='Unit Test',
             data={"a": 1}
         ))
         self.session.commit()
 
-        todo = self.session.query(models.ToDo).one()
+        todo = self.session.query(nandyio_chore_models.ToDo).one()
         self.assertEqual(str(todo), "<ToDo(name='Unit Test',person_id=1,created=7)>")
         self.assertEqual(todo.person_id, 1)
         self.assertEqual(todo.name, "Unit Test")
@@ -218,20 +218,20 @@ class TestMySQL(unittest.TestCase):
 
         todo.data["a"] = 2
         self.session.commit()
-        todo = self.session.query(models.ToDo).one()
+        todo = self.session.query(nandyio_chore_models.ToDo).one()
         self.assertEqual(todo.data, {"a": 2})
 
-    @unittest.mock.patch("models.time.time", unittest.mock.MagicMock(return_value=7))
+    @unittest.mock.patch("nandyio_chore_models.time.time", unittest.mock.MagicMock(return_value=7))
     def test_Routine(self):
 
-        self.session.add(models.Routine(
+        self.session.add(nandyio_chore_models.Routine(
             person_id=1,
             name='Unit Test',
             data={"a": 1}
         ))
         self.session.commit()
 
-        routine = self.session.query(models.Routine).one()
+        routine = self.session.query(nandyio_chore_models.Routine).one()
         self.assertEqual(str(routine), "<Routine(name='Unit Test',person_id=1,created=7)>")
         self.assertEqual(routine.person_id, 1)
         self.assertEqual(routine.name, "Unit Test")
@@ -242,5 +242,5 @@ class TestMySQL(unittest.TestCase):
 
         routine.data["a"] = 2
         self.session.commit()
-        routine = self.session.query(models.Routine).one()
+        routine = self.session.query(nandyio_chore_models.Routine).one()
         self.assertEqual(routine.data, {"a": 2})
