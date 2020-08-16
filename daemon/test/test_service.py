@@ -28,7 +28,7 @@ class TestService(klotio_unittest.TestCase):
 
         daemon = service.Daemon()
 
-        self.assertEqual(daemon.chore, "http://toast.com")
+        self.assertEqual(daemon.chore_api, "http://toast.com")
         self.assertEqual(daemon.sleep, 0.7)
 
         self.assertEqual(daemon.logger.name, "nandy-io-chore-daemon")
