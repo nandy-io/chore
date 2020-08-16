@@ -7,6 +7,8 @@ import time
 import requests
 import traceback
 
+import klotio
+
 class Daemon(object):
     """
     Main class for daemon
@@ -16,7 +18,16 @@ class Daemon(object):
 
         self.sleep = float(os.environ['SLEEP'])
 
-        self.chore = os.environ['CHORE_API']
+        self.chore_api = os.environ['CHORE_API']
+
+        self.logger = klotio.logger("nandy-io-chore-daemon")
+
+        self.logger.debug("init", extra={
+            "init": {
+                "sleep": self.sleep,
+                "chore_api": self.chore_api
+            }
+        })
 
     @staticmethod
     def expire(data):
@@ -65,11 +76,13 @@ class Daemon(object):
 
         for task in routine["data"]["tasks"]:
 
-            if "start" in task and "end" not in task:
-                
-                if self.remind(task):
+            self.logger.info("task", extra={"task": task})
 
-                    requests.patch(f"{self.chore}/routine/{routine['id']}/task/{task['id']}/remind").raise_for_status()
+            if "start" in task and "end" not in task:
+
+                if self.remind(task):
+                    self.logger.info("remind")
+                    requests.patch(f"{self.chore_api}/routine/{routine['id']}/task/{task['id']}/remind").raise_for_status()
 
                 break
 
@@ -78,12 +91,16 @@ class Daemon(object):
         Sees if any reminders need to go out for a routine
         """
 
+        self.logger.info("routine", extra={"routine": routine})
+
         if self.expire(routine["data"]):
-            requests.patch(f"{self.chore}/routine/{routine['id']}/expire").raise_for_status()
+            self.logger.info("expire")
+            requests.patch(f"{self.chore_api}/routine/{routine['id']}/expire").raise_for_status()
             return
 
         if self.remind(routine["data"]):
-            requests.patch(f"{self.chore}/routine/{routine['id']}/remind").raise_for_status()
+            self.logger.info("remind")
+            requests.patch(f"{self.chore_api}/routine/{routine['id']}/remind").raise_for_status()
 
         if "tasks" in routine["data"]:
             self.tasks(routine)
@@ -93,8 +110,7 @@ class Daemon(object):
         Processes all the routines for reminding
         """
 
-        for routine in requests.get(f"{self.chore}/routine?status=opened").json()["routines"]:
-
+        for routine in requests.get(f"{self.chore_api}/routine?status=opened").json()["routines"]:
             try:
                 self.routine(routine)
             except Exception as exception:

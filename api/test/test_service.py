@@ -13,14 +13,14 @@ import sqlalchemy.exc
 
 import klotio
 import klotio_sqlalchemy_restful
-import nandyio_people
+import nandyio_people_integrations
 
-import models
-import test_models
+import nandyio_chore_models
+import test_nandyio_chore_models
 
 import service
 
-class TestRest(klotio_unittest.TestCase):
+class TestRestful(klotio_unittest.TestCase):
 
     maxDiff = None
 
@@ -30,7 +30,8 @@ class TestRest(klotio_unittest.TestCase):
         "REDIS_PORT": "667",
         "REDIS_CHANNEL": "stuff"
     })
-    @unittest.mock.patch("redis.StrictRedis", klotio_unittest.MockRedis)
+    @unittest.mock.patch("redis.Redis", klotio_unittest.MockRedis)
+    @unittest.mock.patch("klotio.logger", klotio_unittest.MockLogger)
     def setUpClass(cls):
 
         cls.app = service.app()
@@ -43,9 +44,11 @@ class TestRest(klotio_unittest.TestCase):
 
         self.session = self.app.mysql.session()
 
-        self.sample = test_models.Sample(self.session)
+        self.sample = test_nandyio_chore_models.Sample(self.session)
 
         self.app.mysql.Base.metadata.create_all(self.app.mysql.engine)
+
+        self.app.logger.clear()
 
     def tearDown(self):
 
@@ -53,14 +56,44 @@ class TestRest(klotio_unittest.TestCase):
         self.app.mysql.drop_database()
 
 
-class TestHealth(TestRest):
+class TestAPI(TestRestful):
+
+    @unittest.mock.patch.dict(os.environ, {
+        "REDIS_HOST": "most.com",
+        "REDIS_PORT": "667",
+        "REDIS_CHANNEL": "stuff"
+    })
+    @unittest.mock.patch("redis.Redis", klotio_unittest.MockRedis)
+    @unittest.mock.patch("klotio.logger", klotio_unittest.MockLogger)
+    def test_app(self):
+
+        app = service.app()
+
+        self.assertEqual(app.name, "nandy-io-chore-api")
+        self.assertEqual(str(app.mysql.engine.url), "mysql+pymysql://root@nandyio-chore-api-mysql:3306/nandy_chore")
+
+        self.assertEqual(app.logger.name, "nandy-io-chore-api")
+
+        self.assertLogged(app.logger, "debug", "init", extra={
+            "init": {
+                "redis": {
+                    "connection": "MockRedis<host=most.com,port=667>",
+                    "channel": "stuff"
+                },
+                "mysql": {
+                    "connection": "mysql+pymysql://root@nandyio-chore-api-mysql:3306/nandy_chore"
+                }
+            }
+        })
+
+class TestHealth(TestRestful):
 
     def test_get(self):
 
         self.assertEqual(self.api.get("/health").json, {"message": "OK"})
 
 
-class TestGroup(TestRest):
+class TestGroup(TestRestful):
 
     @unittest.mock.patch("requests.get")
     def test_get(self, mock_get):
@@ -82,7 +115,7 @@ class TestGroup(TestRest):
         ])
 
 
-class TestTemplate(TestRest):
+class TestTemplate(TestRestful):
 
     @unittest.mock.patch("klotio.integrations", klotio_unittest.MockIntegrations())
     def test_integrations(self):
@@ -257,7 +290,7 @@ class TestTemplate(TestRest):
         self.assertEqual(service.Template.form({}, {"kind": "test"}), "test")
         self.assertEqual(service.Template.form({}, {}), "template")
 
-class TestTemplateCL(TestRest):
+class TestTemplateCL(TestRestful):
 
     @unittest.mock.patch("klotio.integrations", klotio_unittest.MockIntegrations())
     def test_fields(self):
@@ -384,6 +417,35 @@ class TestTemplateCL(TestRest):
             }
         ])
 
+        self.assertLogged(self.app.logger, "debug", "response", extra={
+            "response": {
+                "status_code": 200,
+                "json": {
+                    "fields": [
+                        {
+                            "name": "name"
+                        },
+                        {
+                            "name": "kind",
+                            "options": [
+                                "area",
+                                "act",
+                                "todo",
+                                "routine"
+                            ],
+                            "style": "radios",
+                            "trigger": True
+                        },
+                        {
+                            "name": "yaml",
+                            "style": "textarea",
+                            "optional": True
+                        }
+                    ]
+                }
+            }
+        })
+
         response = self.api.options("/template", json={"template": {
             "nope": "bad"
         }})
@@ -461,6 +523,19 @@ class TestTemplateCL(TestRest):
             "data": {"a": 1}
         })
 
+        self.assertLogged(self.app.logger, "debug", "response", extra={
+            "response": {
+                "status_code": 201,
+                "json": {
+                    "template": {
+                        "name": "unit",
+                        "kind": "todo",
+                        "data": {"a": 1}
+                    }
+                }
+            }
+        })
+
     def test_get(self):
 
         self.sample.template("unit", "todo")
@@ -475,7 +550,23 @@ class TestTemplateCL(TestRest):
             }
         ])
 
-class TestTemplateRUD(TestRest):
+        self.assertLogged(self.app.logger, "debug", "response", extra={
+            "response": {
+                "status_code": 200,
+                "json": {
+                    "templates": [
+                        {
+                            "name": "test"
+                        },
+                        {
+                            "name": "unit"
+                        }
+                    ]
+                }
+            }
+        })
+
+class TestTemplateRUD(TestRestful):
 
     @unittest.mock.patch("klotio.integrations", klotio_unittest.MockIntegrations())
     def test_fields(self):
@@ -628,6 +719,47 @@ class TestTemplateRUD(TestRest):
             }
         ])
 
+        self.assertLogged(self.app.logger, "debug", "response", extra={
+            "response": {
+                "status_code": 200,
+                "json": {
+                    "fields": [
+                        {
+                            "name": "id",
+                            "readonly": True,
+                            "value": template.id,
+                            "original": template.id
+                        },
+                        {
+                            "name": "name",
+                            "value": "unit",
+                            "original": "unit"
+                        },
+                        {
+                            "name": "kind",
+                            "options": [
+                                "area",
+                                "act",
+                                "todo",
+                                "routine"
+                            ],
+                            "style": "radios",
+                            "trigger": True,
+                            "value": "todo",
+                            "original": "todo"
+                        },
+                        {
+                            "name": "yaml",
+                            "style": "textarea",
+                            "optional": True,
+                            "value": "a: 1\n",
+                            "original": "a: 1\n"
+                        }
+                    ]
+                }
+            }
+        })
+
         response = self.api.options(f"/template/{template.id}", json={"template": {
             "nope": "bad"
         }})
@@ -718,6 +850,20 @@ class TestTemplateRUD(TestRest):
             "yaml": "a: 1\n"
         })
 
+        self.assertLogged(self.app.logger, "debug", "response", extra={
+            "response": {
+                "status_code": 200,
+                "json": {
+                    "template": {
+                        "name": "unit",
+                        "kind": "todo",
+                        "data": {"a": 1},
+                        "yaml": "a: 1\n"
+                    }
+                }
+            }
+        })
+
     def test_patch(self):
 
         template = self.sample.template("unit", "todo", {"a": 1})
@@ -734,18 +880,40 @@ class TestTemplateRUD(TestRest):
             "data": {"a": 1}
         })
 
+        self.assertLogged(self.app.logger, "debug", "response", extra={
+            "response": {
+                "status_code": 200,
+                "json": {
+                    "template": {
+                        "name": "unit",
+                        "kind": "act",
+                        "data": {"a": 1}
+                    }
+                }
+            }
+        })
+
     def test_delete(self):
 
         template = self.sample.template("unit", "todo")
 
         self.assertStatusValue(self.api.delete(f"/template/{template.id}"), 202, "deleted", 1)
 
+        self.assertLogged(self.app.logger, "debug", "response", extra={
+            "response": {
+                "status_code": 202,
+                "json": {
+                    "deleted": 1
+                }
+            }
+        })
+
         self.assertStatusModels(self.api.get("/template"), 200, "templates", [])
 
 
-class TestArea(TestRest):
+class TestArea(TestRestful):
 
-    @unittest.mock.patch("nandyio_people.Person", nandyio_people_unittest.MockPerson)
+    @unittest.mock.patch("nandyio_people_integrations.Person", nandyio_people_unittest.MockPerson)
     @unittest.mock.patch("service.time.time", unittest.mock.MagicMock(return_value=7))
     def test_build(self):
 
@@ -842,7 +1010,7 @@ class TestArea(TestRest):
             }
         })
 
-    @unittest.mock.patch("nandyio_people.Person", nandyio_people_unittest.MockPerson)
+    @unittest.mock.patch("nandyio_people_integrations.Person", nandyio_people_unittest.MockPerson)
     @unittest.mock.patch("service.time.time", unittest.mock.MagicMock(return_value=7))
     @unittest.mock.patch("klotio_sqlalchemy_restful.notify")
     def test_notify(self, mock_notify):
@@ -858,10 +1026,10 @@ class TestArea(TestRest):
             "kind": "area",
             "action": "test",
             "area": service.Area.response(model),
-            "person": nandyio_people.Person.model(name="unit")
+            "person": nandyio_people_integrations.Person.model(name="unit")
         })
 
-    @unittest.mock.patch("nandyio_people.Person", nandyio_people_unittest.MockPerson)
+    @unittest.mock.patch("nandyio_people_integrations.Person", nandyio_people_unittest.MockPerson)
     @unittest.mock.patch("service.time.time", unittest.mock.MagicMock(return_value=7))
     @unittest.mock.patch("klotio_sqlalchemy_restful.notify")
     def test_create(self, mock_notify):
@@ -883,7 +1051,7 @@ class TestArea(TestRest):
             }
         }).json["create"]
 
-        item = self.session.query(models.Area).get(area_id)
+        item = self.session.query(nandyio_chore_models.Area).get(area_id)
         self.session.commit()
 
         self.assertEqual(item.person_id, 1)
@@ -900,10 +1068,10 @@ class TestArea(TestRest):
             "kind": "area",
             "action": "create",
             "area": service.Area.response(item),
-            "person": nandyio_people.Person.model(name="unit")
+            "person": nandyio_people_integrations.Person.model(name="unit")
         })
 
-    @unittest.mock.patch("nandyio_people.Person", nandyio_people_unittest.MockPerson)
+    @unittest.mock.patch("nandyio_people_integrations.Person", nandyio_people_unittest.MockPerson)
     @unittest.mock.patch("service.time.time", unittest.mock.MagicMock(return_value=7))
     @unittest.mock.patch("klotio_sqlalchemy_restful.notify")
     def test_wrong(self, mock_notify):
@@ -921,16 +1089,16 @@ class TestArea(TestRest):
 
         @klotio_sqlalchemy_restful.session
         def wrong():
-            response = {"wrong": service.Area.wrong(self.session.query(models.Area).get(flask.request.json["wrong"]))}
+            response = {"wrong": service.Area.wrong(self.session.query(nandyio_chore_models.Area).get(flask.request.json["wrong"]))}
             flask.request.session.commit()
             return response
 
         self.app.add_url_rule('/wrong/area', 'wrong', wrong)
 
         self.assertTrue(self.api.get("/wrong/area", json={"wrong": area_id}).json["wrong"])
-        area = self.session.query(models.Area).get(area_id)
+        area = self.session.query(nandyio_chore_models.Area).get(area_id)
         self.assertEqual(area.status, "negative")
-        todo = self.session.query(models.ToDo).all()[0]
+        todo = self.session.query(nandyio_chore_models.ToDo).all()[0]
         self.assertEqual(todo.person_id, area.person_id)
         self.assertEqual(todo.name, "Unit")
         self.assertEqual(todo.data["text"], "test")
@@ -940,13 +1108,13 @@ class TestArea(TestRest):
             "kind": "area",
             "action": "wrong",
             "area": service.Area.response(area),
-            "person": nandyio_people.Person.model(name="unit")
+            "person": nandyio_people_integrations.Person.model(name="unit")
         })
         self.assertEqual(mock_notify.call_args_list[1].args[0], {
             "kind": "todo",
             "action": "create",
             "todo": service.ToDo.response(todo),
-            "person": nandyio_people.Person.model(name="unit")
+            "person": nandyio_people_integrations.Person.model(name="unit")
         })
 
         self.assertFalse(self.api.get("/wrong/area", json={"wrong": area_id}).json["wrong"])
@@ -965,9 +1133,9 @@ class TestArea(TestRest):
         self.assertFalse(service.Area.right(model))
         mock_notify.assert_called_once()
 
-class TestAreaCL(TestRest):
+class TestAreaCL(TestRestful):
 
-    @unittest.mock.patch("nandyio_people.Person", nandyio_people_unittest.MockPerson)
+    @unittest.mock.patch("nandyio_people_integrations.Person", nandyio_people_unittest.MockPerson)
     @unittest.mock.patch("klotio.integrations", klotio_unittest.MockIntegrations())
     def test_fields(self):
 
@@ -1083,7 +1251,7 @@ class TestAreaCL(TestRest):
             }
         ])
 
-    @unittest.mock.patch("nandyio_people.Person", nandyio_people_unittest.MockPerson)
+    @unittest.mock.patch("nandyio_people_integrations.Person", nandyio_people_unittest.MockPerson)
     def test_options(self):
 
         template_id = self.sample.template("test", "area", {"a": 1}).id
@@ -1130,6 +1298,54 @@ class TestAreaCL(TestRest):
                 "optional": True
             }
         ])
+
+        self.assertLogged(self.app.logger, "debug", "response", extra={
+            "response": {
+                "status_code": 200,
+                "json": {
+                    "fields": [
+                        {
+                            "name": "person_id",
+                            "label": "person",
+                            "style": "radios",
+                            "integrate": {
+                                "url": "http://api.people-nandy-io/integrate"
+                            },
+                            "options": [
+                                1,
+                                2
+                            ],
+                            "labels": {
+                                1: "unit",
+                                2: "test"
+                            }
+                        },
+                        {
+                            "name": "status",
+                            "options": ['positive', 'negative'],
+                            "style": "radios"
+                        },
+                        {
+                            "name": "template_id",
+                            "label": "template",
+                            "options": [template_id],
+                            "labels": {template_id: "test"},
+                            "style": "select",
+                            "trigger": True,
+                            "optional": True
+                        },
+                        {
+                            "name": "name"
+                        },
+                        {
+                            "name": "yaml",
+                            "style": "textarea",
+                            "optional": True
+                        }
+                    ]
+                }
+            }
+        })
 
         response = self.api.options("/area", json={"area": {
             "nope": "bad"
@@ -1233,7 +1449,7 @@ class TestAreaCL(TestRest):
             }
         ])
 
-    @unittest.mock.patch("nandyio_people.Person", nandyio_people_unittest.MockPerson)
+    @unittest.mock.patch("nandyio_people_integrations.Person", nandyio_people_unittest.MockPerson)
     @unittest.mock.patch("service.time.time", unittest.mock.MagicMock(return_value=7))
     def test_post(self):
 
@@ -1258,7 +1474,22 @@ class TestAreaCL(TestRest):
             }
         })
 
-        area_id = response.json["area"]["id"]
+        self.assertLogged(self.app.logger, "debug", "response", extra={
+            "response": {
+                "status_code": 201,
+                "json": {
+                    "area": {
+                        "person_id": 1,
+                        "name": "unit",
+                        "status": "negative",
+                        "data": {
+                            "a": 1,
+                            "notified": 7
+                        }
+                    }
+                }
+            }
+        })
 
     @unittest.mock.patch("service.time.time", unittest.mock.MagicMock(return_value=7))
     def test_get(self):
@@ -1275,15 +1506,31 @@ class TestAreaCL(TestRest):
             }
         ])
 
+        self.assertLogged(self.app.logger, "debug", "response", extra={
+            "response": {
+                "status_code": 200,
+                "json": {
+                    "areas": [
+                        {
+                            "name": "test"
+                        },
+                        {
+                            "name": "unit"
+                        }
+                    ]
+                }
+            }
+        })
+
         self.assertStatusModels(self.api.get("/area?since=0&status=positive"), 200, "areas", [
             {
                 "name": "unit"
             }
         ])
 
-class TestAreaRUD(TestRest):
+class TestAreaRUD(TestRestful):
 
-    @unittest.mock.patch("nandyio_people.Person", nandyio_people_unittest.MockPerson)
+    @unittest.mock.patch("nandyio_people_integrations.Person", nandyio_people_unittest.MockPerson)
     @unittest.mock.patch("klotio.integrations", klotio_unittest.MockIntegrations())
     def test_fields(self):
 
@@ -1349,7 +1596,7 @@ class TestAreaRUD(TestRest):
             }
         ])
 
-    @unittest.mock.patch("nandyio_people.Person", nandyio_people_unittest.MockPerson)
+    @unittest.mock.patch("nandyio_people_integrations.Person", nandyio_people_unittest.MockPerson)
     def test_options(self):
 
         area_id = self.sample.area("unit", "test", status="positive", data={"a": 1}).id
@@ -1415,6 +1662,73 @@ class TestAreaRUD(TestRest):
                 "original": "a: 1\n"
             }
         ])
+
+        self.assertLogged(self.app.logger, "debug", "response", extra={
+            "response": {
+                "status_code": 200,
+                "json": {
+                    "fields": [
+                        {
+                            "name": "id",
+                            "readonly": True,
+                            "value": area_id,
+                            "original": area_id
+                        },
+                        {
+                            "name": "person_id",
+                            "label": "person",
+                            "style": "radios",
+                            "integrate": {
+                                "url": "http://api.people-nandy-io/integrate"
+                            },
+                            "options": [
+                                1,
+                                2
+                            ],
+                            "labels": {
+                                1: "unit",
+                                2: "test"
+                            },
+                            "value": 1,
+                            "original": 1
+                        },
+                        {
+                            "name": "status",
+                            "options": ['positive', 'negative'],
+                            "style": "radios",
+                            "value": "positive",
+                            "original": "positive"
+                        },
+                        {
+                            "name": "name",
+                            "value": "test",
+                            "original": "test"
+                        },
+                        {
+                            "name": "created",
+                            "style": "datetime",
+                            "readonly": True,
+                            "value": 7,
+                            "original": 7
+                        },
+                        {
+                            "name": "updated",
+                            "style": "datetime",
+                            "readonly": True,
+                            "value": 8,
+                            "original": 8
+                        },
+                        {
+                            "name": "yaml",
+                            "style": "textarea",
+                            "optional": True,
+                            "value": "a: 1\n",
+                            "original": "a: 1\n"
+                        }
+                    ]
+                }
+            }
+        })
 
         response = self.api.options(f"/area/{area_id}", json={"area": {
             "nope": "bad"
@@ -1556,6 +1870,17 @@ class TestAreaRUD(TestRest):
             "name": "test"
         })
 
+        self.assertLogged(self.app.logger, "debug", "response", extra={
+            "response": {
+                "status_code": 200,
+                "json": {
+                    "area": {
+                        "name": "test"
+                    }
+                }
+            }
+        })
+
     def test_patch(self):
 
         area_id = self.sample.area("unit", "test").id
@@ -1565,6 +1890,15 @@ class TestAreaRUD(TestRest):
                 "status": "negative"
             }
         }), 202, "updated", 1)
+
+        self.assertLogged(self.app.logger, "debug", "response", extra={
+            "response": {
+                "status_code": 202,
+                "json": {
+                    "updated": 1
+                }
+            }
+        })
 
         self.assertStatusModel(self.api.get(f"/area/{area_id}"), 200, "area", {
             "name": "test",
@@ -1577,11 +1911,20 @@ class TestAreaRUD(TestRest):
 
         self.assertStatusValue(self.api.delete(f"/area/{area_id}"), 202, "deleted", 1)
 
+        self.assertLogged(self.app.logger, "debug", "response", extra={
+            "response": {
+                "status_code": 202,
+                "json": {
+                    "deleted": 1
+                }
+            }
+        })
+
         self.assertStatusModels(self.api.get("/area"), 200, "areas", [])
 
-class TestAreaA(TestRest):
+class TestAreaA(TestRestful):
 
-    @unittest.mock.patch("nandyio_people.Person", nandyio_people_unittest.MockPerson)
+    @unittest.mock.patch("nandyio_people_integrations.Person", nandyio_people_unittest.MockPerson)
     @unittest.mock.patch("service.time.time", unittest.mock.MagicMock(return_value=7))
     def test_patch(self):
 
@@ -1590,23 +1933,32 @@ class TestAreaA(TestRest):
         # wrong
 
         self.assertStatusValue(self.api.patch(f"/area/{area_id}/wrong"), 202, "updated", True)
-        item = self.session.query(models.Area).get(area_id)
+        item = self.session.query(nandyio_chore_models.Area).get(area_id)
         self.session.commit()
         self.assertEqual(item.status, "negative")
         self.assertStatusValue(self.api.patch(f"/area/{area_id}/wrong"), 202, "updated", False)
 
+        self.assertLogged(self.app.logger, "debug", "response", extra={
+            "response": {
+                "status_code": 202,
+                "json": {
+                    "updated": False
+                }
+            }
+        })
+
         # right
 
         self.assertStatusValue(self.api.patch(f"/area/{area_id}/right"), 202, "updated", True)
-        item = self.session.query(models.Area).get(area_id)
+        item = self.session.query(nandyio_chore_models.Area).get(area_id)
         self.session.commit()
         self.assertEqual(item.status, "positive")
         self.assertStatusValue(self.api.patch(f"/area/{area_id}/right"), 202, "updated", False)
 
 
-class TestAct(TestRest):
+class TestAct(TestRestful):
 
-    @unittest.mock.patch("nandyio_people.Person", nandyio_people_unittest.MockPerson)
+    @unittest.mock.patch("nandyio_people_integrations.Person", nandyio_people_unittest.MockPerson)
     @unittest.mock.patch("service.time.time", unittest.mock.MagicMock(return_value=7))
     def test_build(self):
 
@@ -1705,7 +2057,7 @@ class TestAct(TestRest):
             }
         })
 
-    @unittest.mock.patch("nandyio_people.Person", nandyio_people_unittest.MockPerson)
+    @unittest.mock.patch("nandyio_people_integrations.Person", nandyio_people_unittest.MockPerson)
     @unittest.mock.patch("service.time.time", unittest.mock.MagicMock(return_value=7))
     @unittest.mock.patch("klotio_sqlalchemy_restful.notify")
     def test_notify(self, mock_notify):
@@ -1721,10 +2073,10 @@ class TestAct(TestRest):
             "kind": "act",
             "action": "test",
             "act": service.Act.response(model),
-            "person": nandyio_people.Person.model(name="unit")
+            "person": nandyio_people_integrations.Person.model(name="unit")
         })
 
-    @unittest.mock.patch("nandyio_people.Person", nandyio_people_unittest.MockPerson)
+    @unittest.mock.patch("nandyio_people_integrations.Person", nandyio_people_unittest.MockPerson)
     @unittest.mock.patch("service.time.time", unittest.mock.MagicMock(return_value=7))
     @unittest.mock.patch("klotio_sqlalchemy_restful.notify")
     def test_create(self, mock_notify):
@@ -1754,7 +2106,7 @@ class TestAct(TestRest):
             }
         }).json["create"]
 
-        model = self.session.query(models.Act).get(act_id)
+        model = self.session.query(nandyio_chore_models.Act).get(act_id)
         self.session.commit()
 
         self.assertEqual(model.person_id, 1)
@@ -1771,11 +2123,11 @@ class TestAct(TestRest):
             }
         })
 
-        todo = self.session.query(models.ToDo).filter_by(name="Unit").all()[0]
+        todo = self.session.query(nandyio_chore_models.ToDo).filter_by(name="Unit").all()[0]
         self.session.commit()
         self.assertEqual(todo.data["text"], "test")
 
-        item = self.session.query(models.Act).get(model.id)
+        item = self.session.query(nandyio_chore_models.Act).get(model.id)
         self.session.commit()
         self.assertEqual(item.name, "unit")
 
@@ -1784,13 +2136,13 @@ class TestAct(TestRest):
                 "kind": "act",
                 "action": "create",
                 "act": service.Act.response(model),
-                "person": nandyio_people.Person.model(id=1)
+                "person": nandyio_people_integrations.Person.model(id=1)
             }),
             unittest.mock.call({
                 "kind": "todo",
                 "action": "create",
                 "todo": service.ToDo.response(todo),
-                "person": nandyio_people.Person.model(id=1)
+                "person": nandyio_people_integrations.Person.model(id=1)
             })
         ])
 
@@ -1806,7 +2158,7 @@ class TestAct(TestRest):
         })
         self.session.commit()
 
-        todo = self.session.query(models.ToDo).filter_by(name="test").all()[0]
+        todo = self.session.query(nandyio_chore_models.ToDo).filter_by(name="test").all()[0]
         self.assertEqual(todo.data, {
             "name": "test",
             "text": "hey",
@@ -1840,9 +2192,9 @@ class TestAct(TestRest):
         self.assertFalse(service.Act.right(model))
         mock_notify.assert_called_once()
 
-class TestActCL(TestRest):
+class TestActCL(TestRestful):
 
-    @unittest.mock.patch("nandyio_people.Person", nandyio_people_unittest.MockPerson)
+    @unittest.mock.patch("nandyio_people_integrations.Person", nandyio_people_unittest.MockPerson)
     @unittest.mock.patch("klotio.integrations", klotio_unittest.MockIntegrations())
     def test_fields(self):
 
@@ -1960,7 +2312,7 @@ class TestActCL(TestRest):
             }
         ])
 
-    @unittest.mock.patch("nandyio_people.Person", nandyio_people_unittest.MockPerson)
+    @unittest.mock.patch("nandyio_people_integrations.Person", nandyio_people_unittest.MockPerson)
     def test_options(self):
 
         template_id = self.sample.template("test", "act", {"a": 1}).id
@@ -2007,6 +2359,54 @@ class TestActCL(TestRest):
                 "optional": True
             }
         ])
+
+        self.assertLogged(self.app.logger, "debug", "response", extra={
+            "response": {
+                "status_code": 200,
+                "json": {
+                    "fields": [
+                        {
+                            "name": "person_id",
+                            "label": "person",
+                            "style": "radios",
+                            "integrate": {
+                                "url": "http://api.people-nandy-io/integrate"
+                            },
+                            "options": [
+                                1,
+                                2
+                            ],
+                            "labels": {
+                                1: "unit",
+                                2: "test"
+                            }
+                        },
+                        {
+                            "name": "status",
+                            "options": ['positive', 'negative'],
+                            "style": "radios"
+                        },
+                        {
+                            "name": "template_id",
+                            "label": "template",
+                            "options": [template_id],
+                            "labels": {template_id: "test"},
+                            "style": "select",
+                            "trigger": True,
+                            "optional": True
+                        },
+                        {
+                            "name": "name"
+                        },
+                        {
+                            "name": "yaml",
+                            "style": "textarea",
+                            "optional": True
+                        }
+                    ]
+                }
+            }
+        })
 
         response = self.api.options("/act", json={"act": {
             "nope": "bad"
@@ -2110,7 +2510,7 @@ class TestActCL(TestRest):
             }
         ])
 
-    @unittest.mock.patch("nandyio_people.Person", nandyio_people_unittest.MockPerson)
+    @unittest.mock.patch("nandyio_people_integrations.Person", nandyio_people_unittest.MockPerson)
     @unittest.mock.patch("service.time.time", unittest.mock.MagicMock(return_value=7))
     def test_post(self):
 
@@ -2135,7 +2535,22 @@ class TestActCL(TestRest):
             }
         })
 
-        act_id = response.json["act"]["id"]
+        self.assertLogged(self.app.logger, "debug", "response", extra={
+            "response": {
+                "status_code": 201,
+                "json": {
+                    "act": {
+                        "person_id": 1,
+                        "name": "unit",
+                        "status": "negative",
+                        "data": {
+                            "a": 1,
+                            "notified": 7
+                        }
+                    }
+                }
+            }
+        })
 
     @unittest.mock.patch("service.time.time", unittest.mock.MagicMock(return_value=7))
     def test_get(self):
@@ -2152,15 +2567,31 @@ class TestActCL(TestRest):
             }
         ])
 
+        self.assertLogged(self.app.logger, "debug", "response", extra={
+            "response": {
+                "status_code": 200,
+                "json": {
+                    "acts": [
+                        {
+                            "name": "test"
+                        },
+                        {
+                            "name": "unit"
+                        }
+                    ]
+                }
+            }
+        })
+
         self.assertStatusModels(self.api.get("/act?since=0&status=positive"), 200, "acts", [
             {
                 "name": "unit"
             }
         ])
 
-class TestActRUD(TestRest):
+class TestActRUD(TestRestful):
 
-    @unittest.mock.patch("nandyio_people.Person", nandyio_people_unittest.MockPerson)
+    @unittest.mock.patch("nandyio_people_integrations.Person", nandyio_people_unittest.MockPerson)
     @unittest.mock.patch("klotio.integrations", klotio_unittest.MockIntegrations())
     def test_fields(self):
 
@@ -2229,7 +2660,7 @@ class TestActRUD(TestRest):
             }
         ])
 
-    @unittest.mock.patch("nandyio_people.Person", nandyio_people_unittest.MockPerson)
+    @unittest.mock.patch("nandyio_people_integrations.Person", nandyio_people_unittest.MockPerson)
     def test_options(self):
 
         act_id = self.sample.act("unit", "test", status="positive", data={"a": 1}).id
@@ -2295,6 +2726,73 @@ class TestActRUD(TestRest):
                 "original": "a: 1\n"
             }
         ])
+
+        self.assertLogged(self.app.logger, "debug", "response", extra={
+            "response": {
+                "status_code": 200,
+                "json": {
+                    "fields": [
+                        {
+                            "name": "id",
+                            "readonly": True,
+                            "value": act_id,
+                            "original": act_id
+                        },
+                        {
+                            "name": "person_id",
+                            "label": "person",
+                            "style": "radios",
+                            "integrate": {
+                                "url": "http://api.people-nandy-io/integrate"
+                            },
+                            "options": [
+                                1,
+                                2
+                            ],
+                            "labels": {
+                                1: "unit",
+                                2: "test"
+                            },
+                            "value": 1,
+                            "original": 1
+                        },
+                        {
+                            "name": "status",
+                            "options": ['positive', 'negative'],
+                            "style": "radios",
+                            "value": "positive",
+                            "original": "positive"
+                        },
+                        {
+                            "name": "name",
+                            "value": "test",
+                            "original": "test"
+                        },
+                        {
+                            "name": "created",
+                            "style": "datetime",
+                            "readonly": True,
+                            "value": 7,
+                            "original": 7
+                        },
+                        {
+                            "name": "updated",
+                            "style": "datetime",
+                            "readonly": True,
+                            "value": 8,
+                            "original": 8
+                        },
+                        {
+                            "name": "yaml",
+                            "style": "textarea",
+                            "optional": True,
+                            "value": "a: 1\n",
+                            "original": "a: 1\n"
+                        }
+                    ]
+                }
+            }
+        })
 
         response = self.api.options(f"/act/{act_id}", json={"act": {
             "nope": "bad"
@@ -2436,6 +2934,17 @@ class TestActRUD(TestRest):
             "name": "test"
         })
 
+        self.assertLogged(self.app.logger, "debug", "response", extra={
+            "response": {
+                "status_code": 200,
+                "json": {
+                    "act": {
+                        "name": "test"
+                    }
+                }
+            }
+        })
+
     def test_patch(self):
 
         act_id = self.sample.act("unit", "test").id
@@ -2451,6 +2960,17 @@ class TestActRUD(TestRest):
             "status": "negative"
         })
 
+        self.assertLogged(self.app.logger, "debug", "response", extra={
+            "response": {
+                "status_code": 200,
+                "json": {
+                    "act": {
+                        "name": "test"
+                    }
+                }
+            }
+        })
+
     def test_delete(self):
 
         act_id = self.sample.act("unit", "test").id
@@ -2459,9 +2979,9 @@ class TestActRUD(TestRest):
 
         self.assertStatusModels(self.api.get("/act"), 200, "acts", [])
 
-class TestActA(TestRest):
+class TestActA(TestRestful):
 
-    @unittest.mock.patch("nandyio_people.Person", nandyio_people_unittest.MockPerson)
+    @unittest.mock.patch("nandyio_people_integrations.Person", nandyio_people_unittest.MockPerson)
     @unittest.mock.patch("service.time.time", unittest.mock.MagicMock(return_value=7))
     def test_patch(self):
 
@@ -2470,22 +2990,31 @@ class TestActA(TestRest):
         # wrong
 
         self.assertStatusValue(self.api.patch(f"/act/{model.id}/wrong"), 202, "updated", True)
-        item = self.session.query(models.Act).get(model.id)
+        item = self.session.query(nandyio_chore_models.Act).get(model.id)
         self.session.commit()
         self.assertEqual(item.status, "negative")
         self.assertStatusValue(self.api.patch(f"/act/{model.id}/wrong"), 202, "updated", False)
 
+        self.assertLogged(self.app.logger, "debug", "response", extra={
+            "response": {
+                "status_code": 202,
+                "json": {
+                    "updated": False
+                }
+            }
+        })
+
         # right
 
         self.assertStatusValue(self.api.patch(f"/act/{model.id}/right"), 202, "updated", True)
-        item = self.session.query(models.Act).get(model.id)
+        item = self.session.query(nandyio_chore_models.Act).get(model.id)
         self.session.commit()
         self.assertEqual(item.status, "positive")
         self.assertStatusValue(self.api.patch(f"/act/{model.id}/right"), 202, "updated", False)
 
-class TestToDo(TestRest):
+class TestToDo(TestRestful):
 
-    @unittest.mock.patch("nandyio_people.Person", nandyio_people_unittest.MockPerson)
+    @unittest.mock.patch("nandyio_people_integrations.Person", nandyio_people_unittest.MockPerson)
     @unittest.mock.patch("service.time.time", unittest.mock.MagicMock(return_value=7))
     def test_build(self):
 
@@ -2582,7 +3111,7 @@ class TestToDo(TestRest):
             }
         })
 
-    @unittest.mock.patch("nandyio_people.Person", nandyio_people_unittest.MockPerson)
+    @unittest.mock.patch("nandyio_people_integrations.Person", nandyio_people_unittest.MockPerson)
     @unittest.mock.patch("service.time.time", unittest.mock.MagicMock(return_value=7))
     @unittest.mock.patch("klotio_sqlalchemy_restful.notify")
     def test_notify(self, mock_notify):
@@ -2598,10 +3127,10 @@ class TestToDo(TestRest):
             "kind": "todo",
             "action": "test",
             "todo": service.ToDo.response(model),
-            "person": nandyio_people.Person.model(name="unit")
+            "person": nandyio_people_integrations.Person.model(name="unit")
         })
 
-    @unittest.mock.patch("nandyio_people.Person", nandyio_people_unittest.MockPerson)
+    @unittest.mock.patch("nandyio_people_integrations.Person", nandyio_people_unittest.MockPerson)
     @unittest.mock.patch("service.time.time", unittest.mock.MagicMock(return_value=7))
     @unittest.mock.patch("klotio_sqlalchemy_restful.notify")
     def test_create(self, mock_notify):
@@ -2623,7 +3152,7 @@ class TestToDo(TestRest):
             }
         }).json["create"]
 
-        model = self.session.query(models.ToDo).get(todo_id)
+        model = self.session.query(nandyio_chore_models.ToDo).get(todo_id)
         self.session.commit()
 
         self.assertEqual(model.person_id, 1)
@@ -2640,10 +3169,10 @@ class TestToDo(TestRest):
             "kind": "todo",
             "action": "create",
             "todo": service.ToDo.response(model),
-            "person": nandyio_people.Person.model(id=1)
+            "person": nandyio_people_integrations.Person.model(id=1)
         })
 
-    @unittest.mock.patch("nandyio_people.Person", nandyio_people_unittest.MockPerson)
+    @unittest.mock.patch("nandyio_people_integrations.Person", nandyio_people_unittest.MockPerson)
     @unittest.mock.patch("service.time.time", unittest.mock.MagicMock(return_value=7))
     @unittest.mock.patch("klotio_sqlalchemy_restful.notify")
     def test_todos(self, mock_notify):
@@ -2671,7 +3200,7 @@ class TestToDo(TestRest):
             "person": "unit"
         }}).json["todos"])
 
-        item = self.session.query(models.ToDo).get(todo_id)
+        item = self.session.query(nandyio_chore_models.ToDo).get(todo_id)
         self.session.commit()
 
         self.assertEqual(item.updated, 7)
@@ -2679,7 +3208,7 @@ class TestToDo(TestRest):
         mock_notify.assert_called_once_with({
             "kind": "todos",
             "action": "remind",
-            "person": nandyio_people.Person.model(name="unit"),
+            "person": nandyio_people_integrations.Person.model(name="unit"),
             "chore-speech.nandy.io": {},
             "todos": service.ToDo.responses([item])
         })
@@ -2693,7 +3222,7 @@ class TestToDo(TestRest):
         mock_notify.assert_called_with({
             "kind": "todos",
             "action": "remind",
-            "person": nandyio_people.Person.model(name="unit"),
+            "person": nandyio_people_integrations.Person.model(name="unit"),
             "chore-speech.nandy.io": {"language": "cursing"},
             "todos": service.ToDo.responses([item])
         })
@@ -2777,7 +3306,7 @@ class TestToDo(TestRest):
         self.assertFalse(service.ToDo.unskip(todo))
         mock_notify.assert_called_once()
 
-    @unittest.mock.patch("nandyio_people.Person", nandyio_people_unittest.MockPerson)
+    @unittest.mock.patch("nandyio_people_integrations.Person", nandyio_people_unittest.MockPerson)
     @unittest.mock.patch("service.time.time", unittest.mock.MagicMock(return_value=7))
     @unittest.mock.patch("klotio_sqlalchemy_restful.notify")
     def test_complete(self, mock_notify):
@@ -2795,7 +3324,7 @@ class TestToDo(TestRest):
 
         @klotio_sqlalchemy_restful.session
         def complete():
-            todo = self.session.query(models.ToDo).get(flask.request.json["complete"])
+            todo = self.session.query(nandyio_chore_models.ToDo).get(flask.request.json["complete"])
             response = {"complete": service.ToDo.complete(todo)}
             flask.request.session.commit()
             return response
@@ -2804,16 +3333,16 @@ class TestToDo(TestRest):
 
         self.assertTrue(self.api.get("/complete/todo", json={"complete": todo_id}).json["complete"])
 
-        todo = self.session.query(models.ToDo).get(todo_id)
+        todo = self.session.query(nandyio_chore_models.ToDo).get(todo_id)
 
         self.assertEqual(todo.status, "closed")
         self.assertTrue(todo.data["end"], 7)
 
-        area = self.session.query(models.Area).get(area_id)
+        area = self.session.query(nandyio_chore_models.Area).get(area_id)
         self.session.commit()
         self.assertEqual(area.status, "positive")
 
-        act = self.session.query(models.Act).filter_by(name="Unit").all()[0]
+        act = self.session.query(nandyio_chore_models.Act).filter_by(name="Unit").all()[0]
         self.assertEqual(act.person_id, todo.person_id)
         self.assertEqual(act.status, "positive")
         self.assertEqual(act.data["text"], "test")
@@ -2822,19 +3351,19 @@ class TestToDo(TestRest):
             "kind": "todo",
             "action": "complete",
             "todo": service.ToDo.response(todo),
-            "person": nandyio_people.Person.model(name="unit")
+            "person": nandyio_people_integrations.Person.model(name="unit")
         })
         self.assertEqual(mock_notify.call_args_list[1].args[0], {
             "kind": "area",
             "action": "right",
             "area": service.Area.response(area),
-            "person": nandyio_people.Person.model(name="unit")
+            "person": nandyio_people_integrations.Person.model(name="unit")
         })
         self.assertEqual(mock_notify.call_args_list[2].args[0], {
             "kind": "act",
             "action": "create",
             "act": service.Act.response(act),
-            "person": nandyio_people.Person.model(name="unit")
+            "person": nandyio_people_integrations.Person.model(name="unit")
         })
 
         self.assertFalse(self.api.get("/complete/todo", json={"complete": todo_id}).json["complete"])
@@ -2847,13 +3376,13 @@ class TestToDo(TestRest):
 
         self.api.get("/complete/todo", json={"complete": todo_id})
 
-        todo = self.session.query(models.ToDo).get(todo_id)
+        todo = self.session.query(nandyio_chore_models.ToDo).get(todo_id)
         self.session.commit()
 
         self.assertEqual(todo.status, "closed")
         self.assertTrue(todo.data["end"], 7)
 
-        act = self.session.query(models.Act).filter_by(name="hey").all()[0]
+        act = self.session.query(nandyio_chore_models.Act).filter_by(name="hey").all()[0]
         self.assertEqual(act.person_id, todo.person_id)
         self.assertEqual(act.status, "positive")
         self.assertEqual(act.data["text"], "you")
@@ -2911,9 +3440,9 @@ class TestToDo(TestRest):
         self.assertFalse(service.ToDo.unexpire(todo))
         mock_notify.assert_called_once()
 
-class TestToDoCL(TestRest):
+class TestToDoCL(TestRestful):
 
-    @unittest.mock.patch("nandyio_people.Person", nandyio_people_unittest.MockPerson)
+    @unittest.mock.patch("nandyio_people_integrations.Person", nandyio_people_unittest.MockPerson)
     @unittest.mock.patch("klotio.integrations", klotio_unittest.MockIntegrations())
     def test_fields(self):
 
@@ -2981,7 +3510,7 @@ class TestToDoCL(TestRest):
 
         self.app.add_url_rule('/template_fields/todocl', 'template_fields', template_fields)
 
-        self.assertEqual(self.api.get('/template_fields/todocl').json["fields"], [
+        self.assertStatusFields(self.api.get('/template_fields/todocl'), 200, [
             {
                 "name": "person_id",
                 "label": "person",
@@ -3029,7 +3558,7 @@ class TestToDoCL(TestRest):
             }
         ])
 
-    @unittest.mock.patch("nandyio_people.Person", nandyio_people_unittest.MockPerson)
+    @unittest.mock.patch("nandyio_people_integrations.Person", nandyio_people_unittest.MockPerson)
     def test_options(self):
 
         template_id = self.sample.template("test", "todo", {"a": 1}).id
@@ -3076,6 +3605,54 @@ class TestToDoCL(TestRest):
                 "optional": True
             }
         ])
+
+        self.assertLogged(self.app.logger, "debug", "response", extra={
+            "response": {
+                "status_code": 200,
+                "json": {
+                    "fields": [
+                        {
+                            "name": "person_id",
+                            "label": "person",
+                            "style": "radios",
+                            "integrate": {
+                                "url": "http://api.people-nandy-io/integrate"
+                            },
+                            "options": [
+                                1,
+                                2
+                            ],
+                            "labels": {
+                                1: "unit",
+                                2: "test"
+                            }
+                        },
+                        {
+                            "name": "status",
+                            "options": ['opened', 'closed'],
+                            "style": "radios"
+                        },
+                        {
+                            "name": "template_id",
+                            "label": "template",
+                            "options": [template_id],
+                            "labels": {template_id: "test"},
+                            "style": "select",
+                            "trigger": True,
+                            "optional": True
+                        },
+                        {
+                            "name": "name"
+                        },
+                        {
+                            "name": "yaml",
+                            "style": "textarea",
+                            "optional": True
+                        }
+                    ]
+                }
+            }
+        })
 
         response = self.api.options("/todo", json={"todo": {
             "nope": "bad"
@@ -3179,7 +3756,7 @@ class TestToDoCL(TestRest):
             }
         ])
 
-    @unittest.mock.patch("nandyio_people.Person", nandyio_people_unittest.MockPerson)
+    @unittest.mock.patch("nandyio_people_integrations.Person", nandyio_people_unittest.MockPerson)
     @unittest.mock.patch("service.time.time", unittest.mock.MagicMock(return_value=7))
     def test_post(self):
 
@@ -3204,7 +3781,22 @@ class TestToDoCL(TestRest):
             }
         })
 
-        todo_id = response.json["todo"]["id"]
+        self.assertLogged(self.app.logger, "debug", "response", extra={
+            "response": {
+                "status_code": 201,
+                "json": {
+                    "todo": {
+                        "person_id": 1,
+                        "name": "unit",
+                        "status": "closed",
+                        "data": {
+                            "a": 1,
+                            "notified": 7
+                        }
+                    }
+                }
+            }
+        })
 
     @unittest.mock.patch("service.time.time", unittest.mock.MagicMock(return_value=7))
     def test_get(self):
@@ -3221,13 +3813,29 @@ class TestToDoCL(TestRest):
             }
         ])
 
+        self.assertLogged(self.app.logger, "debug", "response", extra={
+            "response": {
+                "status_code": 200,
+                "json": {
+                    "todos": [
+                        {
+                            "name": "test"
+                        },
+                        {
+                            "name": "unit"
+                        }
+                    ]
+                }
+            }
+        })
+
         self.assertStatusModels(self.api.get("/todo?since=0&status=opened"), 200, "todos", [
             {
                 "name": "unit"
             }
         ])
 
-    @unittest.mock.patch("nandyio_people.Person", nandyio_people_unittest.MockPerson)
+    @unittest.mock.patch("nandyio_people_integrations.Person", nandyio_people_unittest.MockPerson)
     @unittest.mock.patch("service.time.time", unittest.mock.MagicMock(return_value=7))
     @unittest.mock.patch("klotio_sqlalchemy_restful.notify", unittest.mock.MagicMock)
     def test_patch(self):
@@ -3241,13 +3849,22 @@ class TestToDoCL(TestRest):
                 "person": "unit"
             }
         }), 202, "updated", True)
-        item = self.session.query(models.ToDo).get(todo_id)
+        item = self.session.query(nandyio_chore_models.ToDo).get(todo_id)
         self.session.commit()
         self.assertEqual(item.data["notified"], 7)
 
-class TestToDoRUD(TestRest):
+        self.assertLogged(self.app.logger, "debug", "response", extra={
+            "response": {
+                "status_code": 202,
+                "json": {
+                    "updated": True
+                }
+            }
+        })
 
-    @unittest.mock.patch("nandyio_people.Person", nandyio_people_unittest.MockPerson)
+class TestToDoRUD(TestRestful):
+
+    @unittest.mock.patch("nandyio_people_integrations.Person", nandyio_people_unittest.MockPerson)
     @unittest.mock.patch("klotio.integrations", klotio_unittest.MockIntegrations())
     def test_fields(self):
 
@@ -3312,7 +3929,7 @@ class TestToDoRUD(TestRest):
             }
         ])
 
-    @unittest.mock.patch("nandyio_people.Person", nandyio_people_unittest.MockPerson)
+    @unittest.mock.patch("nandyio_people_integrations.Person", nandyio_people_unittest.MockPerson)
     def test_options(self):
 
         todo_id = self.sample.todo("unit", "test", status="opened", data={"text": 1}).id
@@ -3378,6 +3995,73 @@ class TestToDoRUD(TestRest):
                 "original": "text: 1\n"
             }
         ])
+
+        self.assertLogged(self.app.logger, "debug", "response", extra={
+            "response": {
+                "status_code": 200,
+                "json": {
+                    "fields": [
+                        {
+                            "name": "id",
+                            "readonly": True,
+                            "value": todo_id,
+                            "original": todo_id
+                        },
+                        {
+                            "name": "person_id",
+                            "label": "person",
+                            "style": "radios",
+                            "integrate": {
+                                "url": "http://api.people-nandy-io/integrate"
+                            },
+                            "options": [
+                                1,
+                                2
+                            ],
+                            "labels": {
+                                1: "unit",
+                                2: "test"
+                            },
+                            "value": 1,
+                            "original": 1
+                        },
+                        {
+                            "name": "status",
+                            "options": ['opened', 'closed'],
+                            "style": "radios",
+                            "value": "opened",
+                            "original": "opened"
+                        },
+                        {
+                            "name": "name",
+                            "value": "test",
+                            "original": "test"
+                        },
+                        {
+                            "name": "created",
+                            "style": "datetime",
+                            "readonly": True,
+                            "value": 7,
+                            "original": 7
+                        },
+                        {
+                            "name": "updated",
+                            "style": "datetime",
+                            "readonly": True,
+                            "value": 8,
+                            "original": 8
+                        },
+                        {
+                            "name": "yaml",
+                            "style": "textarea",
+                            "optional": True,
+                            "value": "text: 1\n",
+                            "original": "text: 1\n"
+                        }
+                    ]
+                }
+            }
+        })
 
         response = self.api.options(f"/todo/{todo_id}", json={"todo": {
             "nope": "bad"
@@ -3519,6 +4203,17 @@ class TestToDoRUD(TestRest):
             "name": "test"
         })
 
+        self.assertLogged(self.app.logger, "debug", "response", extra={
+            "response": {
+                "status_code": 200,
+                "json": {
+                    "todo": {
+                        "name": "test"
+                    }
+                }
+            }
+        })
+
     def test_patch(self):
 
         todo_id = self.sample.todo("unit", "test").id
@@ -3528,6 +4223,15 @@ class TestToDoRUD(TestRest):
                 "status": "closed"
             }
         }), 202, "updated", 1)
+
+        self.assertLogged(self.app.logger, "debug", "response", extra={
+            "response": {
+                "status_code": 202,
+                "json": {
+                    "updated": 1
+                }
+            }
+        })
 
         self.assertStatusModel(self.api.get(f"/todo/{todo_id}"), 200, "todo", {
             "name": "test",
@@ -3540,11 +4244,20 @@ class TestToDoRUD(TestRest):
 
         self.assertStatusValue(self.api.delete(f"/todo/{todo_id}"), 202, "deleted", 1)
 
+        self.assertLogged(self.app.logger, "debug", "response", extra={
+            "response": {
+                "status_code": 202,
+                "json": {
+                    "deleted": 1
+                }
+            }
+        })
+
         self.assertStatusModels(self.api.get("/todo"), 200, "areas", [])
 
-class TestToDoA(TestRest):
+class TestToDoA(TestRestful):
 
-    @unittest.mock.patch("nandyio_people.Person", nandyio_people_unittest.MockPerson)
+    @unittest.mock.patch("nandyio_people_integrations.Person", nandyio_people_unittest.MockPerson)
     @unittest.mock.patch("service.time.time", unittest.mock.MagicMock(return_value=7))
     def test_patch(self):
 
@@ -3555,14 +4268,23 @@ class TestToDoA(TestRest):
         # remind
 
         self.assertStatusValue(self.api.patch(f"/todo/{todo.id}/remind"), 202, "updated", True)
-        item = self.session.query(models.ToDo).get(todo.id)
+        item = self.session.query(nandyio_chore_models.ToDo).get(todo.id)
         self.session.commit()
         self.assertEqual(item.data["notified"], 7)
+
+        self.assertLogged(self.app.logger, "debug", "response", extra={
+            "response": {
+                "status_code": 202,
+                "json": {
+                    "updated": True
+                }
+            }
+        })
 
         # pause
 
         self.assertStatusValue(self.api.patch(f"/todo/{todo.id}/pause"), 202, "updated", True)
-        item = self.session.query(models.ToDo).get(todo.id)
+        item = self.session.query(nandyio_chore_models.ToDo).get(todo.id)
         self.session.commit()
         self.assertTrue(item.data["paused"])
         self.assertStatusValue(self.api.patch(f"/todo/{todo.id}/pause"), 202, "updated", False)
@@ -3570,7 +4292,7 @@ class TestToDoA(TestRest):
         # unpause
 
         self.assertStatusValue(self.api.patch(f"/todo/{todo.id}/unpause"), 202, "updated", True)
-        item = self.session.query(models.ToDo).get(todo.id)
+        item = self.session.query(nandyio_chore_models.ToDo).get(todo.id)
         self.session.commit()
         self.assertFalse(item.data["paused"])
         self.assertStatusValue(self.api.patch(f"/todo/{todo.id}/unpause"), 202, "updated", False)
@@ -3578,7 +4300,7 @@ class TestToDoA(TestRest):
         # skip
 
         self.assertStatusValue(self.api.patch(f"/todo/{todo.id}/skip"), 202, "updated", True)
-        item = self.session.query(models.ToDo).get(todo.id)
+        item = self.session.query(nandyio_chore_models.ToDo).get(todo.id)
         self.session.commit()
         self.assertTrue(item.data["skipped"])
         self.assertStatusValue(self.api.patch(f"/todo/{todo.id}/skip"), 202, "updated", False)
@@ -3586,7 +4308,7 @@ class TestToDoA(TestRest):
         # unskip
 
         self.assertStatusValue(self.api.patch(f"/todo/{todo.id}/unskip"), 202, "updated", True)
-        item = self.session.query(models.ToDo).get(todo.id)
+        item = self.session.query(nandyio_chore_models.ToDo).get(todo.id)
         self.session.commit()
         self.assertFalse(item.data["skipped"])
         self.assertStatusValue(self.api.patch(f"/todo/{todo.id}/unskip"), 202, "updated", False)
@@ -3594,7 +4316,7 @@ class TestToDoA(TestRest):
         # complete
 
         self.assertStatusValue(self.api.patch(f"/todo/{todo.id}/complete"), 202, "updated", True)
-        item = self.session.query(models.ToDo).get(todo.id)
+        item = self.session.query(nandyio_chore_models.ToDo).get(todo.id)
         self.session.commit()
         self.assertEqual(item.status, "closed")
         self.assertStatusValue(self.api.patch(f"/todo/{todo.id}/complete"), 202, "updated", False)
@@ -3602,7 +4324,7 @@ class TestToDoA(TestRest):
         # uncomplete
 
         self.assertStatusValue(self.api.patch(f"/todo/{todo.id}/uncomplete"), 202, "updated", True)
-        item = self.session.query(models.ToDo).get(todo.id)
+        item = self.session.query(nandyio_chore_models.ToDo).get(todo.id)
         self.session.commit()
         self.assertEqual(item.status, "opened")
         self.assertStatusValue(self.api.patch(f"/todo/{todo.id}/uncomplete"), 202, "updated", False)
@@ -3610,7 +4332,7 @@ class TestToDoA(TestRest):
         # expire
 
         self.assertStatusValue(self.api.patch(f"/todo/{todo.id}/expire"), 202, "updated", True)
-        item = self.session.query(models.ToDo).get(todo.id)
+        item = self.session.query(nandyio_chore_models.ToDo).get(todo.id)
         self.session.commit()
         self.assertTrue(item.data["expired"])
         self.assertStatusValue(self.api.patch(f"/todo/{todo.id}/expire"), 202, "updated", False)
@@ -3618,14 +4340,14 @@ class TestToDoA(TestRest):
         # unexpire
 
         self.assertStatusValue(self.api.patch(f"/todo/{todo.id}/unexpire"), 202, "updated", True)
-        item = self.session.query(models.ToDo).get(todo.id)
+        item = self.session.query(nandyio_chore_models.ToDo).get(todo.id)
         self.session.commit()
         self.assertFalse(item.data["expired"])
         self.assertStatusValue(self.api.patch(f"/todo/{todo.id}/unexpire"), 202, "updated", False)
 
-class TestRoutine(TestRest):
+class TestRoutine(TestRestful):
 
-    @unittest.mock.patch("nandyio_people.Person", nandyio_people_unittest.MockPerson)
+    @unittest.mock.patch("nandyio_people_integrations.Person", nandyio_people_unittest.MockPerson)
     @unittest.mock.patch("service.time.time", unittest.mock.MagicMock(return_value=7))
     def test_build(self):
 
@@ -3722,7 +4444,7 @@ class TestRoutine(TestRest):
             }
         })
 
-    @unittest.mock.patch("nandyio_people.Person", nandyio_people_unittest.MockPerson)
+    @unittest.mock.patch("nandyio_people_integrations.Person", nandyio_people_unittest.MockPerson)
     @unittest.mock.patch("service.time.time", unittest.mock.MagicMock(return_value=7))
     def test_tasks(self):
 
@@ -3779,7 +4501,7 @@ class TestRoutine(TestRest):
             }
         })
 
-    @unittest.mock.patch("nandyio_people.Person", nandyio_people_unittest.MockPerson)
+    @unittest.mock.patch("nandyio_people_integrations.Person", nandyio_people_unittest.MockPerson)
     @unittest.mock.patch("service.time.time", unittest.mock.MagicMock(return_value=7))
     @unittest.mock.patch("klotio_sqlalchemy_restful.notify")
     def test_notify(self, mock_notify):
@@ -3795,10 +4517,10 @@ class TestRoutine(TestRest):
             "kind": "routine",
             "action": "test",
             "routine": service.Routine.response(model),
-            "person": nandyio_people.Person.model(name="unit")
+            "person": nandyio_people_integrations.Person.model(name="unit")
         })
 
-    @unittest.mock.patch("nandyio_people.Person", nandyio_people_unittest.MockPerson)
+    @unittest.mock.patch("nandyio_people_integrations.Person", nandyio_people_unittest.MockPerson)
     @unittest.mock.patch("service.time.time", unittest.mock.MagicMock(return_value=7))
     @unittest.mock.patch("klotio_sqlalchemy_restful.notify")
     def test_check(self, mock_notify):
@@ -3830,7 +4552,7 @@ class TestRoutine(TestRest):
             "action": "start",
             "task": routine.data["tasks"][0],
             "routine": service.Routine.response(routine),
-            "person": nandyio_people.Person.model(name="unit")
+            "person": nandyio_people_integrations.Person.model(name="unit")
         })
 
         service.Routine.check(routine)
@@ -3840,7 +4562,7 @@ class TestRoutine(TestRest):
             "action": "start",
             "task": routine.data["tasks"][0],
             "routine": service.Routine.response(routine),
-            "person": nandyio_people.Person.model(name="unit")
+            "person": nandyio_people_integrations.Person.model(name="unit")
         })
 
         routine.data["tasks"][0]["end"] = 0
@@ -3854,7 +4576,7 @@ class TestRoutine(TestRest):
             "action": "pause",
             "task": routine.data["tasks"][1],
             "routine": service.Routine.response(routine),
-            "person": nandyio_people.Person.model(name="unit")
+            "person": nandyio_people_integrations.Person.model(name="unit")
         })
 
         routine.data["tasks"][1]["end"] = 0
@@ -3863,7 +4585,7 @@ class TestRoutine(TestRest):
 
         self.assertEqual(routine.status, "closed")
 
-    @unittest.mock.patch("nandyio_people.Person", nandyio_people_unittest.MockPerson)
+    @unittest.mock.patch("nandyio_people_integrations.Person", nandyio_people_unittest.MockPerson)
     @unittest.mock.patch("service.time.time", unittest.mock.MagicMock(return_value=7))
     @unittest.mock.patch("klotio_sqlalchemy_restful.notify", unittest.mock.MagicMock)
     def test_create(self):
@@ -3890,7 +4612,7 @@ class TestRoutine(TestRest):
             }
         }).json["create"]
 
-        routine = self.session.query(models.Routine).get(routine_id)
+        routine = self.session.query(nandyio_chore_models.Routine).get(routine_id)
         self.session.commit()
 
         self.assertEqual(routine.person_id, 1)
@@ -3910,7 +4632,7 @@ class TestRoutine(TestRest):
                 }]
         })
 
-    @unittest.mock.patch("nandyio_people.Person", nandyio_people_unittest.MockPerson)
+    @unittest.mock.patch("nandyio_people_integrations.Person", nandyio_people_unittest.MockPerson)
     @unittest.mock.patch("service.time.time", unittest.mock.MagicMock(return_value=7))
     @unittest.mock.patch("klotio_sqlalchemy_restful.notify", unittest.mock.MagicMock)
     def test_next(self):
@@ -4077,9 +4799,9 @@ class TestRoutine(TestRest):
         self.assertFalse(service.Routine.unexpire(routine))
         mock_notify.assert_called_once()
 
-class TestRoutineCL(TestRest):
+class TestRoutineCL(TestRestful):
 
-    @unittest.mock.patch("nandyio_people.Person", nandyio_people_unittest.MockPerson)
+    @unittest.mock.patch("nandyio_people_integrations.Person", nandyio_people_unittest.MockPerson)
     @unittest.mock.patch("klotio.integrations", klotio_unittest.MockIntegrations())
     def test_fields(self):
 
@@ -4195,7 +4917,7 @@ class TestRoutineCL(TestRest):
             }
         ])
 
-    @unittest.mock.patch("nandyio_people.Person", nandyio_people_unittest.MockPerson)
+    @unittest.mock.patch("nandyio_people_integrations.Person", nandyio_people_unittest.MockPerson)
     def test_options(self):
 
         template_id = self.sample.template("test", "routine", {"a": 1}).id
@@ -4242,6 +4964,54 @@ class TestRoutineCL(TestRest):
                 "optional": True
             }
         ])
+
+        self.assertLogged(self.app.logger, "debug", "response", extra={
+            "response": {
+                "status_code": 200,
+                "json": {
+                    "fields": [
+                        {
+                            "name": "person_id",
+                            "label": "person",
+                            "style": "radios",
+                            "integrate": {
+                                "url": "http://api.people-nandy-io/integrate"
+                            },
+                            "options": [
+                                1,
+                                2
+                            ],
+                            "labels": {
+                                1: "unit",
+                                2: "test"
+                            }
+                        },
+                        {
+                            "name": "status",
+                            "options": ['opened', 'closed'],
+                            "style": "radios"
+                        },
+                        {
+                            "name": "template_id",
+                            "label": "template",
+                            "options": [template_id],
+                            "labels": {template_id: "test"},
+                            "style": "select",
+                            "trigger": True,
+                            "optional": True
+                        },
+                        {
+                            "name": "name"
+                        },
+                        {
+                            "name": "yaml",
+                            "style": "textarea",
+                            "optional": True
+                        }
+                    ]
+                }
+            }
+        })
 
         response = self.api.options("/routine", json={"routine": {
             "nope": "bad"
@@ -4345,7 +5115,7 @@ class TestRoutineCL(TestRest):
             }
         ])
 
-    @unittest.mock.patch("nandyio_people.Person", nandyio_people_unittest.MockPerson)
+    @unittest.mock.patch("nandyio_people_integrations.Person", nandyio_people_unittest.MockPerson)
     @unittest.mock.patch("service.time.time", unittest.mock.MagicMock(return_value=7))
     def test_post(self):
 
@@ -4383,6 +5153,32 @@ class TestRoutineCL(TestRest):
             }
         })
 
+        self.assertLogged(self.app.logger, "debug", "response", extra={
+            "response": {
+                "status_code": 201,
+                "json": {
+                    "routine": {
+                        "person_id": 1,
+                        "name": "unit",
+                        "status": "opened",
+                        "created": 6,
+                        "updated": 7,
+                        "data": {
+                            "start": 7,
+                            "text": "hey",
+                            "notified": 7,
+                            "tasks": [{
+                                "id": 0,
+                                "text": "ya",
+                                "start": 7,
+                                "notified": 7
+                            }]
+                        }
+                    }
+                }
+            }
+        })
+
     @unittest.mock.patch("service.time.time", unittest.mock.MagicMock(return_value=7))
     def test_get(self):
 
@@ -4398,15 +5194,31 @@ class TestRoutineCL(TestRest):
             }
         ])
 
+        self.assertLogged(self.app.logger, "debug", "response", extra={
+            "response": {
+                "status_code": 200,
+                "json": {
+                    "routines": [
+                        {
+                            "name": "test"
+                        },
+                        {
+                            "name": "unit"
+                        }
+                    ]
+                }
+            }
+        })
+
         self.assertStatusModels(self.api.get("/routine?since=0&status=opened"), 200, "routines", [
             {
                 "name": "test"
             }
         ])
 
-class TestRoutineRUD(TestRest):
+class TestRoutineRUD(TestRestful):
 
-    @unittest.mock.patch("nandyio_people.Person", nandyio_people_unittest.MockPerson)
+    @unittest.mock.patch("nandyio_people_integrations.Person", nandyio_people_unittest.MockPerson)
     @unittest.mock.patch("klotio.integrations", klotio_unittest.MockIntegrations())
     def test_fields(self):
 
@@ -4471,7 +5283,7 @@ class TestRoutineRUD(TestRest):
             }
         ])
 
-    @unittest.mock.patch("nandyio_people.Person", nandyio_people_unittest.MockPerson)
+    @unittest.mock.patch("nandyio_people_integrations.Person", nandyio_people_unittest.MockPerson)
     def test_options(self):
 
         routine_id = self.sample.routine("unit", "test", status="opened", data={"text": 1}).id
@@ -4537,6 +5349,73 @@ class TestRoutineRUD(TestRest):
                 "original": "text: 1\n"
             }
         ])
+
+        self.assertLogged(self.app.logger, "debug", "response", extra={
+            "response": {
+                "status_code": 200,
+                "json": {
+                    "fields": [
+                        {
+                            "name": "id",
+                            "readonly": True,
+                            "value": routine_id,
+                            "original": routine_id
+                        },
+                        {
+                            "name": "person_id",
+                            "label": "person",
+                            "style": "radios",
+                            "integrate": {
+                                "url": "http://api.people-nandy-io/integrate"
+                            },
+                            "options": [
+                                1,
+                                2
+                            ],
+                            "labels": {
+                                1: "unit",
+                                2: "test"
+                            },
+                            "value": 1,
+                            "original": 1
+                        },
+                        {
+                            "name": "status",
+                            "options": ['opened', 'closed'],
+                            "style": "radios",
+                            "value": "opened",
+                            "original": "opened"
+                        },
+                        {
+                            "name": "name",
+                            "value": "test",
+                            "original": "test"
+                        },
+                        {
+                            "name": "created",
+                            "style": "datetime",
+                            "readonly": True,
+                            "value": 7,
+                            "original": 7
+                        },
+                        {
+                            "name": "updated",
+                            "style": "datetime",
+                            "readonly": True,
+                            "value": 8,
+                            "original": 8
+                        },
+                        {
+                            "name": "yaml",
+                            "style": "textarea",
+                            "optional": True,
+                            "value": "text: 1\n",
+                            "original": "text: 1\n"
+                        }
+                    ]
+                }
+            }
+        })
 
         response = self.api.options(f"/routine/{routine_id}", json={"routine": {
             "nope": "bad"
@@ -4685,6 +5564,24 @@ class TestRoutineRUD(TestRest):
             "yaml": "text: routine it\n"
         })
 
+        self.assertLogged(self.app.logger, "debug", "response", extra={
+            "response": {
+                "status_code": 200,
+                "json": {
+                    "routine": {
+                        "person_id": routine.person_id,
+                        "name": "unit",
+                        "status": "opened",
+                        "created": 7,
+                        "data": {
+                            "text": "routine it"
+                        },
+                        "yaml": "text: routine it\n"
+                    }
+                }
+            }
+        })
+
     def test_patch(self):
 
         routine_id = self.sample.routine("test", "unit").id
@@ -4694,6 +5591,15 @@ class TestRoutineRUD(TestRest):
                 "status": "closed"
             }
         }), 202, "updated", 1)
+
+        self.assertLogged(self.app.logger, "debug", "response", extra={
+            "response": {
+                "status_code": 202,
+                "json": {
+                    "updated": 1
+                }
+            }
+        })
 
         self.assertStatusModel(self.api.get(f"/routine/{routine_id}"), 200, "routine", {
             "status": "closed"
@@ -4705,11 +5611,20 @@ class TestRoutineRUD(TestRest):
 
         self.assertStatusValue(self.api.delete(f"/routine/{routine_id}"), 202, "deleted", 1)
 
+        self.assertLogged(self.app.logger, "debug", "response", extra={
+            "response": {
+                "status_code": 202,
+                "json": {
+                    "deleted": 1
+                }
+            }
+        })
+
         self.assertStatusModels(self.api.get("/routine"), 200, "routines", [])
 
-class TestRoutineA(TestRest):
+class TestRoutineA(TestRestful):
 
-    @unittest.mock.patch("nandyio_people.Person", nandyio_people_unittest.MockPerson)
+    @unittest.mock.patch("nandyio_people_integrations.Person", nandyio_people_unittest.MockPerson)
     @unittest.mock.patch("service.time.time", unittest.mock.MagicMock(return_value=7))
     def test_patch(self):
 
@@ -4730,21 +5645,30 @@ class TestRoutineA(TestRest):
         # remind
 
         self.assertStatusValue(self.api.patch(f"/routine/{routine.id}/remind"), 202, "updated", True)
-        item = self.session.query(models.Routine).get(routine.id)
+        item = self.session.query(nandyio_chore_models.Routine).get(routine.id)
         self.session.commit()
         self.assertEqual(item.data["notified"], 7)
+
+        self.assertLogged(self.app.logger, "debug", "response", extra={
+            "response": {
+                "status_code": 202,
+                "json": {
+                    "updated": True
+                }
+            }
+        })
 
         # next
 
         self.assertStatusValue(self.api.patch(f"/routine/{routine.id}/next"), 202, "updated", True)
-        item = self.session.query(models.Routine).get(routine.id)
+        item = self.session.query(nandyio_chore_models.Routine).get(routine.id)
         self.session.commit()
         self.assertEqual(item.data["tasks"][0]["end"], 7)
 
         # pause
 
         self.assertStatusValue(self.api.patch(f"/routine/{routine.id}/pause"), 202, "updated", True)
-        item = self.session.query(models.Routine).get(routine.id)
+        item = self.session.query(nandyio_chore_models.Routine).get(routine.id)
         self.session.commit()
         self.assertTrue(item.data["paused"])
         self.assertStatusValue(self.api.patch(f"/routine/{routine.id}/pause"), 202, "updated", False)
@@ -4752,7 +5676,7 @@ class TestRoutineA(TestRest):
         # unpause
 
         self.assertStatusValue(self.api.patch(f"/routine/{routine.id}/unpause"), 202, "updated", True)
-        item = self.session.query(models.Routine).get(routine.id)
+        item = self.session.query(nandyio_chore_models.Routine).get(routine.id)
         self.session.commit()
         self.assertFalse(item.data["paused"])
         self.assertStatusValue(self.api.patch(f"/routine/{routine.id}/unpause"), 202, "updated", False)
@@ -4760,7 +5684,7 @@ class TestRoutineA(TestRest):
         # skip
 
         self.assertStatusValue(self.api.patch(f"/routine/{routine.id}/skip"), 202, "updated", True)
-        item = self.session.query(models.Routine).get(routine.id)
+        item = self.session.query(nandyio_chore_models.Routine).get(routine.id)
         self.session.commit()
         self.assertTrue(item.data["skipped"])
         self.assertStatusValue(self.api.patch(f"/routine/{routine.id}/skip"), 202, "updated", False)
@@ -4768,7 +5692,7 @@ class TestRoutineA(TestRest):
         # unskip
 
         self.assertStatusValue(self.api.patch(f"/routine/{routine.id}/unskip"), 202, "updated", True)
-        item = self.session.query(models.Routine).get(routine.id)
+        item = self.session.query(nandyio_chore_models.Routine).get(routine.id)
         self.session.commit()
         self.assertFalse(item.data["skipped"])
         self.assertStatusValue(self.api.patch(f"/routine/{routine.id}/unskip"), 202, "updated", False)
@@ -4776,7 +5700,7 @@ class TestRoutineA(TestRest):
         # complete
 
         self.assertStatusValue(self.api.patch(f"/routine/{routine.id}/complete"), 202, "updated", True)
-        item = self.session.query(models.Routine).get(routine.id)
+        item = self.session.query(nandyio_chore_models.Routine).get(routine.id)
         self.session.commit()
         self.assertEqual(item.status, "closed")
         self.assertStatusValue(self.api.patch(f"/routine/{routine.id}/complete"), 202, "updated", False)
@@ -4784,7 +5708,7 @@ class TestRoutineA(TestRest):
         # uncomplete
 
         self.assertStatusValue(self.api.patch(f"/routine/{routine.id}/uncomplete"), 202, "updated", True)
-        item = self.session.query(models.Routine).get(routine.id)
+        item = self.session.query(nandyio_chore_models.Routine).get(routine.id)
         self.session.commit()
         self.assertEqual(item.status, "opened")
         self.assertStatusValue(self.api.patch(f"/routine/{routine.id}/uncomplete"), 202, "updated", False)
@@ -4792,7 +5716,7 @@ class TestRoutineA(TestRest):
         # expire
 
         self.assertStatusValue(self.api.patch(f"/routine/{routine.id}/expire"), 202, "updated", True)
-        item = self.session.query(models.Routine).get(routine.id)
+        item = self.session.query(nandyio_chore_models.Routine).get(routine.id)
         self.session.commit()
         self.assertTrue(item.data["expired"])
         self.assertStatusValue(self.api.patch(f"/routine/{routine.id}/expire"), 202, "updated", False)
@@ -4800,15 +5724,15 @@ class TestRoutineA(TestRest):
         # unexpire
 
         self.assertStatusValue(self.api.patch(f"/routine/{routine.id}/unexpire"), 202, "updated", True)
-        item = self.session.query(models.Routine).get(routine.id)
+        item = self.session.query(nandyio_chore_models.Routine).get(routine.id)
         self.session.commit()
         self.assertFalse(item.data["expired"])
         self.assertStatusValue(self.api.patch(f"/routine/{routine.id}/unexpire"), 202, "updated", False)
 
 
-class TestTask(TestRest):
+class TestTask(TestRestful):
 
-    @unittest.mock.patch("nandyio_people.Person", nandyio_people_unittest.MockPerson)
+    @unittest.mock.patch("nandyio_people_integrations.Person", nandyio_people_unittest.MockPerson)
     @unittest.mock.patch("service.time.time", unittest.mock.MagicMock(return_value=7))
     @unittest.mock.patch("klotio_sqlalchemy_restful.notify")
     def test_notify(self, mock_notify):
@@ -4832,7 +5756,7 @@ class TestTask(TestRest):
             "action": "test",
             "task": routine.data["tasks"][0],
             "routine": service.Routine.response(routine),
-            "person": nandyio_people.Person.model(name="unit")
+            "person": nandyio_people_integrations.Person.model(name="unit")
         })
 
     @unittest.mock.patch("service.time.time", unittest.mock.MagicMock(return_value=7))
@@ -4941,7 +5865,7 @@ class TestTask(TestRest):
         mock_task_notify.assert_called_once()
         mock_routine_notify.assert_called_once()
 
-    @unittest.mock.patch("nandyio_people.Person", nandyio_people_unittest.MockPerson)
+    @unittest.mock.patch("nandyio_people_integrations.Person", nandyio_people_unittest.MockPerson)
     @unittest.mock.patch("service.time.time", unittest.mock.MagicMock(return_value=7))
     @unittest.mock.patch("klotio_sqlalchemy_restful.notify")
     def test_complete(self, mock_notify):
@@ -4959,7 +5883,7 @@ class TestTask(TestRest):
 
         @klotio_sqlalchemy_restful.session
         def complete():
-            routine = self.session.query(models.Routine).get(flask.request.json["complete"])
+            routine = self.session.query(nandyio_chore_models.Routine).get(flask.request.json["complete"])
             response = {"complete": service.Task.complete(routine.data["tasks"][0], routine)}
             flask.request.session.commit()
             return response
@@ -4968,7 +5892,7 @@ class TestTask(TestRest):
 
         self.assertTrue(self.api.get("/complete/task", json={"complete": routine_id}).json["complete"])
 
-        routine = self.session.query(models.Routine).get(routine_id)
+        routine = self.session.query(nandyio_chore_models.Routine).get(routine_id)
 
         self.assertTrue(routine.data["tasks"][0]["end"], 7)
         self.assertEqual(routine.status, "closed")
@@ -5006,18 +5930,18 @@ class TestTask(TestRest):
                 "text": "do it",
                 "todo": 1
             },
-            "person": nandyio_people.Person.model(name="unit")
+            "person": nandyio_people_integrations.Person.model(name="unit")
         })
         self.assertEqual(mock_notify.call_args_list[1].args[0], {
             "kind": "routine",
             "action": "complete",
             "routine": service.Routine.response(routine),
-            "person": nandyio_people.Person.model(name="unit")
+            "person": nandyio_people_integrations.Person.model(name="unit")
         })
 
         self.assertFalse(self.api.get("/complete/task", json={"complete": routine_id}).json["complete"])
 
-    @unittest.mock.patch("nandyio_people.Person", nandyio_people_unittest.MockPerson)
+    @unittest.mock.patch("nandyio_people_integrations.Person", nandyio_people_unittest.MockPerson)
     @unittest.mock.patch("service.time.time", unittest.mock.MagicMock(return_value=7))
     @unittest.mock.patch("klotio_sqlalchemy_restful.notify")
     def test_uncomplete(self, mock_notify):
@@ -5037,7 +5961,7 @@ class TestTask(TestRest):
 
         @klotio_sqlalchemy_restful.session
         def uncomplete():
-            routine = self.session.query(models.Routine).get(flask.request.json["uncomplete"])
+            routine = self.session.query(nandyio_chore_models.Routine).get(flask.request.json["uncomplete"])
             response = {"uncomplete": service.Task.uncomplete(routine.data["tasks"][0], routine)}
             flask.request.session.commit()
             return response
@@ -5046,13 +5970,13 @@ class TestTask(TestRest):
 
         self.assertTrue(self.api.get("/uncomplete/task", json={"uncomplete": routine_id}).json["uncomplete"])
 
-        routine = self.session.query(models.Routine).get(routine_id)
+        routine = self.session.query(nandyio_chore_models.Routine).get(routine_id)
         self.session.commit()
 
         self.assertNotIn("end", routine.data["tasks"][0])
         self.assertEqual(routine.status, "opened")
 
-        item = self.session.query(models.ToDo).get(todo.id)
+        item = self.session.query(nandyio_chore_models.ToDo).get(todo.id)
         self.assertEqual(item.status, "opened")
 
         self.assertEqual(mock_notify.call_args_list[0].args[0], {
@@ -5085,20 +6009,20 @@ class TestTask(TestRest):
                 "text": "do it",
                 "todo": 1
             },
-            "person": nandyio_people.Person.model(name="unit")
+            "person": nandyio_people_integrations.Person.model(name="unit")
         })
         self.assertEqual(mock_notify.call_args_list[1].args[0], {
             "kind": "routine",
             "action": "uncomplete",
             "routine": service.Routine.response(routine),
-            "person": nandyio_people.Person.model(name="unit")
+            "person": nandyio_people_integrations.Person.model(name="unit")
         })
 
         self.assertFalse(self.api.get("/uncomplete/task", json={"uncomplete": routine_id}).json["uncomplete"])
 
-class TestTaskA(TestRest):
+class TestTaskA(TestRestful):
 
-    @unittest.mock.patch("nandyio_people.Person", nandyio_people_unittest.MockPerson)
+    @unittest.mock.patch("nandyio_people_integrations.Person", nandyio_people_unittest.MockPerson)
     @unittest.mock.patch("service.time.time", unittest.mock.MagicMock(return_value=7))
     def test_patch(self):
 
@@ -5115,14 +6039,23 @@ class TestTaskA(TestRest):
         # remind
 
         self.assertStatusValue(self.api.patch(f"/routine/{routine.id}/task/0/remind"), 202, "updated", True)
-        item = self.session.query(models.Routine).get(routine.id)
+        item = self.session.query(nandyio_chore_models.Routine).get(routine.id)
         self.session.commit()
         self.assertEqual(item.data["tasks"][0]["notified"], 7)
+
+        self.assertLogged(self.app.logger, "debug", "response", extra={
+            "response": {
+                "status_code": 202,
+                "json": {
+                    "updated": True
+                }
+            }
+        })
 
         # pause
 
         self.assertStatusValue(self.api.patch(f"/routine/{routine.id}/task/0/pause"), 202, "updated", True)
-        item = self.session.query(models.Routine).get(routine.id)
+        item = self.session.query(nandyio_chore_models.Routine).get(routine.id)
         self.session.commit()
         self.assertTrue(item.data["tasks"][0]["paused"])
         self.assertStatusValue(self.api.patch(f"/routine/{routine.id}/task/0/pause"), 202, "updated", False)
@@ -5130,7 +6063,7 @@ class TestTaskA(TestRest):
         # unpause
 
         self.assertStatusValue(self.api.patch(f"/routine/{routine.id}/task/0/unpause"), 202, "updated", True)
-        item = self.session.query(models.Routine).get(routine.id)
+        item = self.session.query(nandyio_chore_models.Routine).get(routine.id)
         self.session.commit()
         self.assertFalse(item.data["tasks"][0]["paused"])
         self.assertStatusValue(self.api.patch(f"/routine/{routine.id}/task/0/unpause"), 202, "updated", False)
@@ -5138,7 +6071,7 @@ class TestTaskA(TestRest):
         # skip
 
         self.assertStatusValue(self.api.patch(f"/routine/{routine.id}/task/0/skip"), 202, "updated", True)
-        item = self.session.query(models.Routine).get(routine.id)
+        item = self.session.query(nandyio_chore_models.Routine).get(routine.id)
         self.session.commit()
         self.assertTrue(item.data["tasks"][0]["skipped"])
         self.assertStatusValue(self.api.patch(f"/routine/{routine.id}/task/0/skip"), 202, "updated", False)
@@ -5146,7 +6079,7 @@ class TestTaskA(TestRest):
         # unskip
 
         self.assertStatusValue(self.api.patch(f"/routine/{routine.id}/task/0/unskip"), 202, "updated", True)
-        item = self.session.query(models.Routine).get(routine.id)
+        item = self.session.query(nandyio_chore_models.Routine).get(routine.id)
         self.session.commit()
         self.assertFalse(item.data["tasks"][0]["skipped"])
         self.assertStatusValue(self.api.patch(f"/routine/{routine.id}/task/0/unskip"), 202, "updated", False)
@@ -5154,7 +6087,7 @@ class TestTaskA(TestRest):
         # complete
 
         self.assertStatusValue(self.api.patch(f"/routine/{routine.id}/task/0/complete"), 202, "updated", True)
-        item = self.session.query(models.Routine).get(routine.id)
+        item = self.session.query(nandyio_chore_models.Routine).get(routine.id)
         self.session.commit()
         self.assertEqual(item.status, "closed")
         self.assertStatusValue(self.api.patch(f"/routine/{routine.id}/task/0/complete"), 202, "updated", False)
@@ -5162,7 +6095,7 @@ class TestTaskA(TestRest):
         # uncomplete
 
         self.assertStatusValue(self.api.patch(f"/routine/{routine.id}/task/0/uncomplete"), 202, "updated", True)
-        item = self.session.query(models.Routine).get(routine.id)
+        item = self.session.query(nandyio_chore_models.Routine).get(routine.id)
         self.session.commit()
         self.assertEqual(item.status, "opened")
         self.assertStatusValue(self.api.patch(f"/routine/{routine.id}/task/0/uncomplete"), 202, "updated", False)
