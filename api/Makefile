@@ -11,13 +11,14 @@ TTY=$(shell if tty -s; then echo "-it"; fi)
 VOLUMES=-v ${PWD}/lib/:/opt/service/lib/ \
 		-v ${PWD}/bin/:/opt/service/bin/ \
 		-v ${PWD}/test/:/opt/service/test/ \
-		-v ${PWD}/mysql.sh:/opt/service/mysql.sh
+		-v ${PWD}/mysql.sh:/opt/service/mysql.sh \
+		-v ${PWD}/.pylintrc:/opt/service/.pylintrc
 ENVIRONMENT=-e MYSQL_HOST=$(MYSQL_HOST) \
 			-e MYSQL_PORT=3306 \
 			-e PYTHONDONTWRITEBYTECODE=1 \
 			-e PYTHONUNBUFFERED=1
 
-.PHONY: cross build network shell debug test push install update remove reset
+.PHONY: cross build network shell debug test lint push install update remove reset
 
 cross:
 	docker run --rm --privileged multiarch/qemu-user-static:register --reset
@@ -44,6 +45,9 @@ debug: mysql
 test: mysql
 	docker run $(TTY) --network=$(NETWORK) $(VOLUMES) $(ENVIRONMENT) $(ACCOUNT)/$(IMAGE):$(VERSION) sh -c "coverage run -m unittest discover -v test && coverage report -m --include 'lib/*.py'"
 	docker rm --force $(MYSQL_HOST)
+
+lint:
+	docker run $(TTY) $(VOLUMES) $(ENVIRONMENT) $(ACCOUNT)/$(IMAGE):$(VERSION) sh -c "pylint --rcfile=.pylintrc lib/"
 
 push:
 	docker push $(ACCOUNT)/$(IMAGE):$(VERSION)

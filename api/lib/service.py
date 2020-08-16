@@ -1,20 +1,17 @@
+"""
+Module for the Chore API
+"""
+
 import os
 import time
-import glob
 import copy
-import json
 import yaml
-import requests
-import functools
-import traceback
 
 import redis
 import flask
 import flask_restful
-import sqlalchemy.exc
 
 import opengui
-
 
 import klotio
 import klotio_flask_restful
@@ -22,7 +19,10 @@ import klotio_sqlalchemy_restful
 import nandyio_people_integrations
 import nandyio_chore_models
 
-def app():
+def build():
+    """
+    Builds the Flask App
+    """
 
     app = flask.Flask("nandy-io-chore-api")
 
@@ -69,10 +69,16 @@ def app():
 
 
 class Group(klotio_flask_restful.Group):
+    """
+    Group class for the Chroe App
+    """
     APP = "chore.nandy.io"
 
 
 class Template(klotio_sqlalchemy_restful.Model):
+    """
+    Template restful model
+    """
 
     SINGULAR = "template"
     PLURAL = "templates"
@@ -97,7 +103,10 @@ class Template(klotio_sqlalchemy_restful.Model):
     ]
 
     @classmethod
-    def integrations(cls, form):
+    def integrations(cls, form): # pylint: disable=arguments-differ
+        """
+        Gets integrations based on what kind of template it is
+        """
 
         integrations = []
 
@@ -108,6 +117,9 @@ class Template(klotio_sqlalchemy_restful.Model):
 
     @classmethod
     def request(cls, converted):
+        """
+        Extracts template info from a request, based on kind
+        """
 
         values = {}
 
@@ -133,6 +145,9 @@ class Template(klotio_sqlalchemy_restful.Model):
 
     @classmethod
     def response(cls, model):
+        """
+        Builds a response, based on kind
+        """
 
         converted = {
             "data": {}
@@ -155,7 +170,10 @@ class Template(klotio_sqlalchemy_restful.Model):
         return converted
 
     @classmethod
-    def choices(cls, kind):
+    def choices(cls, kind): # pylint: disable=arguments-differ
+        """
+        Generates the template choices
+        """
 
         ids = []
         labels = {}
@@ -176,6 +194,9 @@ class Template(klotio_sqlalchemy_restful.Model):
 
     @staticmethod
     def form(values, originals):
+        """
+        Extract the kind from values/originals
+        """
 
         if values and "kind" in values:
             return values["kind"]
@@ -186,22 +207,44 @@ class Template(klotio_sqlalchemy_restful.Model):
         return "template"
 
 class TemplateCL(Template, klotio_sqlalchemy_restful.ModelCL):
+    """
+    Template Class for Creating and Listing
+    """
 
     @classmethod
     def fields(cls, values=None, originals=None):
+        """
+        Creates the fields, based on kind
+        """
 
-        return opengui.Fields(values, originals=originals, fields=copy.deepcopy(cls.FIELDS + cls.integrations(cls.form(values, originals)) + cls.YAML))
+        return opengui.Fields(values, originals=originals, fields=copy.deepcopy(
+            cls.FIELDS + cls.integrations(cls.form(values, originals)) + cls.YAML)
+        )
 
 class TemplateRUD(Template, klotio_sqlalchemy_restful.ModelRUD):
+    """
+    Template Class for Retrieving, Updating, and Deleting
+    """
 
     @classmethod
     def fields(cls, values=None, originals=None):
+        """
+        Creates the fields, based on kind
+        """
 
-        return opengui.Fields(values, originals=originals, fields=copy.deepcopy(cls.ID + cls.FIELDS + cls.integrations(cls.form(values, originals)) + cls.YAML))
+        return opengui.Fields(values, originals=originals, fields=copy.deepcopy(
+            cls.ID + cls.FIELDS + cls.integrations(cls.form(values, originals)) + cls.YAML
+        ))
 
 
 
 class Status(klotio_sqlalchemy_restful.Model):
+    """
+    Status Class, made for models that have a status
+    """
+
+    STATUSES = []
+    ACTIONS = []
 
     @classmethod
     def build(cls, **kwargs):
@@ -280,6 +323,9 @@ class Status(klotio_sqlalchemy_restful.Model):
 
     @classmethod
     def create(cls, **kwargs):
+        """
+        Creates a model for kwargs
+        """
 
         model = cls.MODEL(**cls.build(**kwargs))
         flask.request.session.add(model)
@@ -290,7 +336,10 @@ class Status(klotio_sqlalchemy_restful.Model):
         return model
 
 
-class StatusCL(klotio_sqlalchemy_restful.ModelCL):
+class StatusCL(Status, klotio_sqlalchemy_restful.ModelCL):
+    """
+    Status Class for Creating and Listing
+    """
 
     FIELDS = [
         {
@@ -311,8 +360,13 @@ class StatusCL(klotio_sqlalchemy_restful.ModelCL):
 
     @classmethod
     def fields(cls, values=None, originals=None):
+        """
+        Builds fields based on current and original values, with Person integration field
+        """
 
-        fields = opengui.Fields(values, originals=originals, fields=nandyio_people_integrations.Person.fields() + cls.FIELDS + cls.integrations() + cls.YAML)
+        fields = opengui.Fields(values, originals=originals, fields=
+            nandyio_people_integrations.Person.fields() + cls.FIELDS + cls.integrations() + cls.YAML
+        )
 
         fields["status"].options = cls.STATUSES
         fields["template_id"].options, fields["template_id"].content["labels"] = Template.choices(cls.SINGULAR)
@@ -329,6 +383,9 @@ class StatusCL(klotio_sqlalchemy_restful.ModelCL):
     @klotio_flask_restful.logger
     @klotio_sqlalchemy_restful.session
     def post(self):
+        """
+        POST endpoint, creates a new model
+        """
 
         model = self.create(**self.request(flask.request.json[self.SINGULAR]))
 
@@ -337,6 +394,9 @@ class StatusCL(klotio_sqlalchemy_restful.ModelCL):
     @klotio_flask_restful.logger
     @klotio_sqlalchemy_restful.session
     def get(self):
+        """
+        GET endpoint, lists models
+        """
 
         since = None
         filter_by = {}
@@ -355,7 +415,7 @@ class StatusCL(klotio_sqlalchemy_restful.ModelCL):
 
         if since is not None:
             models = models.filter(
-                self.MODEL.updated>time.time()-since*60*60*24
+                self.MODEL.updated > time.time() - since*60*60*24
             )
 
         models = models.order_by(
@@ -366,7 +426,10 @@ class StatusCL(klotio_sqlalchemy_restful.ModelCL):
 
         return {self.PLURAL: self.responses(models)}
 
-class StatusRUD(klotio_sqlalchemy_restful.ModelRUD):
+class StatusRUD(Status, klotio_sqlalchemy_restful.ModelRUD):
+    """
+    Status Class for Retrieving, Updating, and Deleting
+    """
 
     FIELDS = [
         {
@@ -390,32 +453,47 @@ class StatusRUD(klotio_sqlalchemy_restful.ModelRUD):
 
     @classmethod
     def fields(cls, values=None, originals=None):
+        """
+        Builds fields based on current and original values, with Person integration field
+        """
 
-        fields = opengui.Fields(values, originals=originals, fields=cls.ID + nandyio_people_integrations.Person.fields() + cls.FIELDS + cls.integrations() + cls.YAML)
+        fields = opengui.Fields(values, originals=originals, fields=
+            cls.ID + nandyio_people_integrations.Person.fields() + cls.FIELDS + cls.integrations() + cls.YAML
+        )
 
         fields["status"].options = cls.STATUSES
 
         return fields
 
-class StatusA(flask_restful.Resource):
+class StatusA(Status, flask_restful.Resource):
+    """
+    Status Class for Actions
+    """
 
     @klotio_flask_restful.logger
     @klotio_sqlalchemy_restful.session
     def patch(self, id, action):
+        """
+        PATCH endpoint, for performing an action on a model
+        """
 
         model = flask.request.session.query(self.MODEL).get(id)
 
-        if action in self.ACTIONS:
+        if action not in self.ACTIONS:
+            return {"message": f"invalid action: {action}"}, 400
 
-            updated = getattr(self, action)(model)
+        updated = getattr(self, action)(model)
 
-            if updated:
-                flask.request.session.commit()
+        if updated:
+            flask.request.session.commit()
 
-            return {"updated": updated}, 202
+        return {"updated": updated}, 202
 
 
 class Value(Status):
+    """
+    Value Class, made for models with positive and negative values
+    """
 
     STATUSES = ['positive', 'negative']
     ACTIONS = ["right", "wrong"]
@@ -452,6 +530,9 @@ class Value(Status):
 
 
 class Area(Value):
+    """
+    Area Class, for models which can be positive (ie clean) or negative (ie dirty)
+    """
 
     SINGULAR = "area"
     PLURAL = "areas"
@@ -461,7 +542,7 @@ class Area(Value):
     @classmethod
     def wrong(cls, model):
         """
-        Wrongs a model
+        Wrongs a model and will create a ToDo if defined
         """
 
         if model.status == "positive":
@@ -478,15 +559,25 @@ class Area(Value):
         return False
 
 class AreaCL(Area, StatusCL):
-    pass
+    """
+    Area Class for Creating and Listing
+    """
 
 class AreaRUD(Area, StatusRUD):
-    pass
+    """
+    Area Class for Retrieving, Updating, and Deleting
+    """
 
 class AreaA(Area, StatusA):
-    pass
+    """
+    Area Class for Actions
+    """
+
 
 class Act(Value):
+    """
+    Act Class, for models which can be positive (ie good) or negative (ie bad)
+    """
 
     SINGULAR = "act"
     PLURAL = "acts"
@@ -495,6 +586,9 @@ class Act(Value):
 
     @classmethod
     def create(cls, **kwargs):
+        """
+        Creates an Act, inclduing a ToDo if defined
+        """
 
         model = cls.MODEL(**cls.build(**kwargs))
         flask.request.session.add(model)
@@ -517,16 +611,25 @@ class Act(Value):
         return model
 
 class ActCL(Act, StatusCL):
-    pass
+    """
+    Act Class for Creating and Listing
+    """
 
 class ActRUD(Act, StatusRUD):
-    pass
+    """
+    Act Class for Retrieving, Updating, and Deleting
+    """
 
 class ActA(Act, StatusA):
-    pass
+    """
+    Act Class for Actions
+    """
 
 
 class State(Status):
+    """
+    State Class, made for models with opened and closed state
+    """
 
     STATUSES = ['opened', 'closed']
     ACTIONS = ["remind", "pause", "unpause", "skip", "unskip", "complete", "uncomplete", "expire", "unexpire"]
@@ -673,6 +776,9 @@ class State(Status):
 
 
 class ToDo(State):
+    """
+    ToDo Class, for chores which need to be done eventually
+    """
 
     SINGULAR = "todo"
     PLURAL = "todos"
@@ -753,10 +859,16 @@ class ToDo(State):
         return False
 
 class ToDoCL(ToDo, StatusCL):
+    """
+    ToDo Class for Creating and Listing
+    """
 
     @klotio_flask_restful.logger
     @klotio_sqlalchemy_restful.session
-    def patch(self):
+    def patch(self): # pylint: disable=no-self-use
+        """
+        PATCH endpoint, reminds all ToDos
+        """
 
         updated = ToDo.todos(flask.request.json["todos"])
 
@@ -766,13 +878,20 @@ class ToDoCL(ToDo, StatusCL):
         return {"updated": updated}, 202
 
 class ToDoRUD(ToDo, StatusRUD):
-    pass
+    """
+    ToDo Class for Retrieving, Updating, and Deleting
+    """
 
 class ToDoA(ToDo, StatusA):
-    pass
+    """
+    ToDo Class for Actions
+    """
 
 
 class Routine(State):
+    """
+    Chores that need to be done and are a list of things to do
+    """
 
     SINGULAR = "routine"
     PLURAL = "routines"
@@ -847,6 +966,9 @@ class Routine(State):
 
     @classmethod
     def create(cls, **kwargs):
+        """
+        Creates a Routine from kwargs
+        """
 
         model = cls.MODEL(**cls.tasks(cls.build(**kwargs)))
         flask.request.session.add(model)
@@ -875,7 +997,7 @@ class Routine(State):
         return False
 
     @classmethod
-    def remind(cls, routine):
+    def remind(cls, routine): # pylint: disable=arguments-differ
         """
         Reminds a routine
         """
@@ -885,16 +1007,25 @@ class Routine(State):
         return True
 
 class RoutineCL(Routine, StatusCL):
-    pass
+    """
+    Routine Class for Creating and Listing
+    """
 
 class RoutineRUD(Routine, StatusRUD):
-    pass
+    """
+    Routine Class for Retrieving, Updating, and Deleting
+    """
 
 class RoutineA(Routine, StatusA):
-    pass
+    """
+    Routine Class for Actions
+    """
 
 
 class Task:
+    """
+    Class for a piece of Routine
+    """
 
     ACTIONS = ["remind", "pause", "unpause", "skip", "unskip", "complete", "uncomplete"]
 
@@ -1045,19 +1176,26 @@ class Task:
         return False
 
 class TaskA(Task, flask_restful.Resource):
+    """
+    Task Class for Actions
+    """
 
     @klotio_flask_restful.logger
     @klotio_sqlalchemy_restful.session
     def patch(self, routine_id, task_id, action):
+        """
+        PATCH endpoint, action for a Task
+        """
 
         routine = flask.request.session.query(nandyio_chore_models.Routine).get(routine_id)
         task = routine.data["tasks"][task_id]
 
-        if action in self.ACTIONS:
+        if action not in self.ACTIONS:
+            return {"message": f"invalid action: {action}"}, 400
 
-            updated = getattr(self, action)(task, routine)
+        updated = getattr(self, action)(task, routine)
 
-            if updated:
-                flask.request.session.commit()
+        if updated:
+            flask.request.session.commit()
 
-            return {"updated": updated}, 202
+        return {"updated": updated}, 202

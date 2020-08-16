@@ -1,4 +1,4 @@
-FROM klotio/sqlalchemy:0.2
+FROM klotio/sqlalchemy:0.3
 
 COPY requirements.txt .
 
