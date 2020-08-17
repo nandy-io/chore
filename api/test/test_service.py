@@ -34,7 +34,7 @@ class TestRestful(klotio_unittest.TestCase):
     @unittest.mock.patch("klotio.logger", klotio_unittest.MockLogger)
     def setUpClass(cls):
 
-        cls.app = service.app()
+        cls.app = service.build()
         cls.api = cls.app.test_client()
 
     def setUp(self):
@@ -67,7 +67,7 @@ class TestAPI(TestRestful):
     @unittest.mock.patch("klotio.logger", klotio_unittest.MockLogger)
     def test_app(self):
 
-        app = service.app()
+        app = service.build()
 
         self.assertEqual(app.name, "nandy-io-chore-api")
         self.assertEqual(str(app.mysql.engine.url), "mysql+pymysql://root@nandyio-chore-api-mysql:3306/nandy_chore")

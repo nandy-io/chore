@@ -1,3 +1,7 @@
+"""
+Module for Chore models
+"""
+
 import time
 
 import sqlalchemy
@@ -7,14 +11,23 @@ import sqlalchemy_jsonfield
 import klotio_sqlalchemy_models
 
 class MySQL(klotio_sqlalchemy_models.MySQL):
+    """
+    MySQL Class that hodls teh DB
+    """
 
     DATABASE = "nandy_chore"
 
 def now():
+    """
+    Mockable function for time
+    """
     return time.time()
 
 
 class Template(MySQL.Base):
+    """
+    Template model, serves as base data for other models
+    """
 
     __tablename__ = "template"
 
@@ -23,7 +36,7 @@ class Template(MySQL.Base):
     kind = sqlalchemy.Column(sqlalchemy.Enum("area", "act", "todo", "routine"))
     data = sqlalchemy.Column(
         sqlalchemy.ext.mutable.MutableDict.as_mutable(
-            sqlalchemy_jsonfield.JSONField(enforce_string=True,enforce_unicode=False)
+            sqlalchemy_jsonfield.JSONField(enforce_string=True, enforce_unicode=False)
         ),
         nullable=False,
         default=dict
@@ -36,6 +49,9 @@ class Template(MySQL.Base):
 
 
 class Area(MySQL.Base):
+    """
+    Area model, a place to keep in order
+    """
 
     __tablename__ = "area"
 
@@ -47,7 +63,7 @@ class Area(MySQL.Base):
     updated = sqlalchemy.Column(sqlalchemy.Integer, default=now)
     data = sqlalchemy.Column(
         sqlalchemy.ext.mutable.MutableDict.as_mutable(
-            sqlalchemy_jsonfield.JSONField(enforce_string=True,enforce_unicode=False)
+            sqlalchemy_jsonfield.JSONField(enforce_string=True, enforce_unicode=False)
         ),
         nullable=False,
         default=dict
@@ -60,6 +76,9 @@ class Area(MySQL.Base):
 
 
 class Act(MySQL.Base):
+    """
+    Act mode, something done good or bad
+    """
 
     __tablename__ = "act"
 
@@ -71,7 +90,7 @@ class Act(MySQL.Base):
     updated = sqlalchemy.Column(sqlalchemy.Integer, default=now)
     data = sqlalchemy.Column(
         sqlalchemy.ext.mutable.MutableDict.as_mutable(
-            sqlalchemy_jsonfield.JSONField(enforce_string=True,enforce_unicode=False)
+            sqlalchemy_jsonfield.JSONField(enforce_string=True, enforce_unicode=False)
         ),
         nullable=False,
         default=dict
@@ -84,6 +103,9 @@ class Act(MySQL.Base):
 
 
 class ToDo(MySQL.Base):
+    """
+    ToDo model, something that needs to get done eventually
+    """
 
     __tablename__ = "todo"
 
@@ -95,7 +117,7 @@ class ToDo(MySQL.Base):
     updated = sqlalchemy.Column(sqlalchemy.Integer, default=now)
     data = sqlalchemy.Column(
         sqlalchemy.ext.mutable.MutableDict.as_mutable(
-            sqlalchemy_jsonfield.JSONField(enforce_string=True,enforce_unicode=False)
+            sqlalchemy_jsonfield.JSONField(enforce_string=True, enforce_unicode=False)
         ),
         nullable=False,
         default=dict
@@ -108,6 +130,9 @@ class ToDo(MySQL.Base):
 
 
 class Routine(MySQL.Base):
+    """
+    Routine model, a list of task that need to be done now
+    """
 
     __tablename__ = "routine"
 
@@ -119,7 +144,7 @@ class Routine(MySQL.Base):
     updated = sqlalchemy.Column(sqlalchemy.Integer, default=now)
     data = sqlalchemy.Column(
         sqlalchemy.ext.mutable.MutableDict.as_mutable(
-            sqlalchemy_jsonfield.JSONField(enforce_string=True,enforce_unicode=False)
+            sqlalchemy_jsonfield.JSONField(enforce_string=True, enforce_unicode=False)
         ),
         nullable=False,
         default=dict

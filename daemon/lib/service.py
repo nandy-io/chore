@@ -9,7 +9,7 @@ import traceback
 
 import klotio
 
-class Daemon(object):
+class Daemon:
     """
     Main class for daemon
     """
